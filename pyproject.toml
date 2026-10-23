@@ -1,13 +1,32 @@
 [project]
 name = "downloader"
 version = "0.1.0"
-description = "Add your description here"
+description = "Universal Media Downloader & Vault"
 readme = "README.md"
 requires-python = ">=3.13"
-dependencies = []
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "websockets>=13.0",
+
+    "pydantic-settings>=2.16.1",
+
+    "sqlalchemy>=2.1.5",
+    "asyncpg>=0.32.0",
+    "alembic>=1.14.0",
+
+    "redis>=8.1.0",
+    "taskiq>=0.13.0",
+    "taskiq-redis>=1.2.4",
+
+    "aioboto3>=15.5.0",
+
+    "yt-dlp>=2026.8.19",
+    "aiogram>=3.31.0",
+]
 
 [project.scripts]
-downloader = "downloader:main"
+downloader = "downloader.app.main:main"
 
 [build-system]
 requires = ["uv_build>=0.13.1,<0.14.0"]
