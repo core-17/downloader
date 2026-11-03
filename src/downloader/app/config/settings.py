@@ -1,14 +1,14 @@
 from functools import lru_cache
+import json
 from pathlib import Path
-from typing import List
+from typing import Annotated, Any, List
 from pydantic import (
     Field,
-    PostgresDsn,
-    RedisDsn,
     SecretStr,
     computed_field,
+    field_validator,
 )
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -58,10 +58,36 @@ class Settings(BaseSettings):
         ...,
         description="Обов'язковий токен від @BotFather. Без нього бот не запуститься.",
     )
-    TELEGRAM_ALLOWED_USERS: List[int] = Field(
+    TELEGRAM_ALLOWED_USERS: Annotated[List[int], NoDecode] = Field(
         default_factory=list,
         description="Білий список Telegram ID. Парсить як рядок '123,456', так і JSON '[123, 456]'",
     )
+
+    @field_validator("TELEGRAM_ALLOWED_USERS", mode="before")
+    @classmethod
+    def parse_allowed_users(cls, v: Any) -> list[int]:
+        if v is None or v == "":
+            return []
+        if isinstance(v, int):
+            return [v]
+        if isinstance(v, list):
+            return [int(x) for x in v if str(x).strip().lstrip("-").isdigit()]
+        if isinstance(v, str):
+            raw = v.strip()
+            if not raw or raw == "your_telegram_id_here":
+                return []
+            if raw.startswith("[") and raw.endswith("]"):
+                try:
+                    parsed = json.loads(raw)
+                    return [int(x) for x in parsed if str(x).strip().lstrip("-").isdigit()]
+                except Exception:
+                    pass
+            return [
+                int(item.strip())
+                for item in raw.split(",")
+                if item.strip().lstrip("-").isdigit()
+            ]
+        return []
 
     MAX_FILE_SIZE_CONFIRMATION_BYTES: int = Field(
         default=2 * 1024 * 1024 * 1024,  # 2 ГБ

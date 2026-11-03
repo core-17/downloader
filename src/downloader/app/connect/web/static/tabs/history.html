@@ -1,0 +1,135 @@
+<!-- ==================== ВКЛАДКА 4: ІСТОРІЯ ЗАДАЧ (З ЛІВОЮ ПАНЕЛЛЮ ФІЛЬТРІВ) ==================== -->
+<div v-if="currentTab === 'history'" class="mt-6 flex flex-col lg:flex-row gap-6 items-start">
+
+    <!-- ЛІВА БІЧНА ПАНЕЛЬ ФІЛЬТРІВ ІСТОРІЇ (Sticky + Власний скрол) -->
+    <aside :class="{ 'top-4': !isNavVisible, 'top-24': isNavVisible }"
+           class="filter-sidebar w-full lg:w-72 shrink-0 bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-5">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+            <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                📜 Фільтри історії
+            </h3>
+            <button v-if="hasActiveHistoryFilters"
+                    @click="resetHistoryFilters"
+                    class="text-xs text-rose-400 hover:text-rose-300 font-medium">
+                Скинути всі
+            </button>
+        </div>
+
+        <!-- Пошук по історії -->
+        <div class="space-y-1.5">
+            <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
+                Пошук задач
+            </span>
+            <div class="relative">
+                <input v-model="historySearch" type="text"
+                       placeholder="Назва, посилання, тег..."
+                       class="w-full pl-3 pr-8 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none">
+                <button v-if="historySearch" @click="historySearch = ''"
+                        class="absolute right-2.5 top-2 text-slate-400 hover:text-white text-xs">✕</button>
+            </div>
+        </div>
+
+        <!-- Фільтр за статусом задачі -->
+        <div class="space-y-2">
+            <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
+                Статус задачі
+            </span>
+            <div class="space-y-1">
+                <button type="button"
+                        @click="historyStatusFilter = 'all'"
+                        :class="historyStatusFilter === 'all'
+                            ? 'bg-blue-600 text-white border-blue-500'
+                            : 'bg-slate-950/70 text-slate-300 hover:bg-slate-800 border-slate-800'"
+                        class="w-full px-3 py-2 rounded-xl text-xs font-medium border flex items-center justify-between transition">
+                    <span>🌐 Усі статуси</span>
+                </button>
+                <button type="button"
+                        @click="historyStatusFilter = 'completed'"
+                        :class="historyStatusFilter === 'completed'
+                            ? 'bg-emerald-600 text-white border-emerald-500'
+                            : 'bg-slate-950/70 text-slate-300 hover:bg-slate-800 border-slate-800'"
+                        class="w-full px-3 py-2 rounded-xl text-xs font-medium border flex items-center justify-between transition">
+                    <span>✅ Завершені</span>
+                </button>
+                <button type="button"
+                        @click="historyStatusFilter = 'downloading'"
+                        :class="historyStatusFilter === 'downloading'
+                            ? 'bg-amber-600 text-white border-amber-500'
+                            : 'bg-slate-950/70 text-slate-300 hover:bg-slate-800 border-slate-800'"
+                        class="w-full px-3 py-2 rounded-xl text-xs font-medium border flex items-center justify-between transition">
+                    <span>⏳ В процесі</span>
+                </button>
+                <button type="button"
+                        @click="historyStatusFilter = 'failed'"
+                        :class="historyStatusFilter === 'failed'
+                            ? 'bg-rose-600 text-white border-rose-500'
+                            : 'bg-slate-950/70 text-slate-300 hover:bg-slate-800 border-slate-800'"
+                        class="w-full px-3 py-2 rounded-xl text-xs font-medium border flex items-center justify-between transition">
+                    <span>❌ Помилки</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Статистика історії -->
+        <div class="pt-3 border-t border-slate-800 text-[11px] text-slate-400 space-y-1">
+            <div>Знайдено задач: <b class="text-white">{{ allTasksList.length }}</b></div>
+        </div>
+    </aside>
+
+    <!-- ПРАВА ОСНОВНА ОБЛАСТЬ ТАБЛИЦІ ІСТОРІЇ -->
+    <div class="flex-1 w-full space-y-4">
+        <div v-if="allTasksList.length === 0" class="bg-slate-900/40 border border-slate-800 rounded-2xl p-10 text-center text-slate-500 text-sm">
+            За вказаними критеріями задач не знайдено.
+        </div>
+
+        <div v-else class="overflow-x-auto bg-slate-900 border border-slate-800 rounded-2xl">
+            <table class="w-full text-left border-collapse text-sm">
+                <thead>
+                    <tr class="border-b border-slate-800 text-xs text-slate-400 uppercase">
+                        <th class="py-3.5 px-4">ID</th>
+                        <th class="py-3.5 px-4">Назва / Джерело</th>
+                        <th class="py-3.5 px-4">Теги</th>
+                        <th class="py-3.5 px-4">Статус</th>
+                        <th class="py-3.5 px-4 text-right">Дія</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-800/70">
+                    <tr v-for="t in allTasksList" :key="t.task_id" class="hover:bg-slate-800/40">
+                        <td class="py-3 px-4 font-mono text-xs text-slate-400">{{ t.task_id }}</td>
+                        <td class="py-3 px-4 max-w-md">
+                            <div class="font-medium text-white truncate">{{ t.title || t.url }}</div>
+                            <div class="text-xs text-slate-500 truncate">{{ t.url }}</div>
+                            <div v-if="t.error" class="text-xs text-rose-400 mt-1">{{ t.error }}</div>
+                        </td>
+                        <td class="py-3 px-4">
+                            <div class="flex flex-wrap gap-1">
+                                <span v-for="tag in (t.tags || []).slice(0, 5)" :key="tag"
+                                      class="px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 text-[10px]">
+                                    #{{ tag }}
+                                </span>
+                            </div>
+                        </td>
+                        <td class="py-3 px-4">
+                            <span class="px-2.5 py-1 rounded-lg text-xs font-medium" :class="getStatusBadgeClass(t.status)">
+                                {{ t.status }}
+                            </span>
+                        </td>
+                        <td class="py-3 px-4 text-right space-x-3">
+                            <a v-if="t.status === 'completed' && t.file_path"
+                               :href="'/api/v1/files/view/' + t.task_id + '/' + encodeURIComponent(t.file_path.split('/').pop())"
+                               target="_blank"
+                               class="text-xs font-semibold text-emerald-400 hover:text-emerald-300">
+                                👁️ Переглянути
+                            </a>
+                            <a v-if="t.status === 'completed' && t.file_path"
+                               :href="'/api/v1/files/download/' + t.task_id + '/' + encodeURIComponent(t.file_path.split('/').pop())"
+                               class="text-xs font-semibold text-blue-400 hover:text-blue-300">
+                                ⬇ Скачати
+                            </a>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

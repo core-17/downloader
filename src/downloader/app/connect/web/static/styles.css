@@ -1,0 +1,188 @@
+/* Базові стилі та v-cloak для запобігання мерехтіння шаблону */
+[v-cloak] {
+    display: none !important;
+}
+
+body {
+    background-color: #020617; /* slate-950 */
+    color: #f8fafc;
+    font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+/* Кастомний акуратний скролбар */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: #020617;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #1e293b;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #334155;
+}
+
+/* Фіксована плаваюча навігаційна панель (Header + Вкладки) */
+.sticky-navbar {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    background-color: rgba(2, 6, 23, 0.88); /* slate-950/88 */
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    transition: transform 0.28s ease, opacity 0.28s ease, box-shadow 0.28s ease;
+}
+
+/* Коли користувач гортає вниз на велику відстань, шапка ховається,
+   а як тільки починає гортати ВГОРУ — миттєво з'являється */
+.sticky-navbar.navbar-hidden {
+    transform: translateY(-110%);
+    opacity: 0;
+    pointer-events: none;
+}
+
+.sticky-navbar.navbar-visible {
+    transform: translateY(0);
+    opacity: 1;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
+}
+
+/* Автоматичне прокручування бічної панелі фільтрів, коли вона зафіксована зверху */
+.filter-sidebar {
+    max-height: calc(100vh - 2rem);
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+    transition: top 0.28s ease, max-height 0.28s ease;
+}
+
+@media (min-width: 1024px) {
+    .filter-sidebar {
+        position: sticky;
+        top: 6.5rem; /* коли шапка на екрані (при гортанні вгору або зверху) */
+        max-height: calc(100vh - 7.5rem);
+    }
+
+    /* Коли верхня шапка плавно прихована при скролі вниз — панель фільтрів автоматично підіймається до самого верху! */
+    body.nav-hidden .filter-sidebar,
+    .nav-hidden-context .filter-sidebar {
+        top: 1rem !important;
+        max-height: calc(100vh - 2rem) !important;
+    }
+}
+
+/* Адаптивні динамічні класи для колонок сітки:
+   На мобільних пристроях автоматично адаптується, а на великих екранах:
+   чим менше вибрано колонок у рядку, тим БІЛЬШІ картки (розтягуються на всю ширину) */
+.media-grid-2 {
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+}
+@media (min-width: 640px) {
+    .media-grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+.media-grid-3 {
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+}
+@media (min-width: 640px) {
+    .media-grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (min-width: 1024px) {
+    .media-grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+.media-grid-4 {
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+}
+@media (min-width: 640px) {
+    .media-grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (min-width: 1024px) {
+    .media-grid-4 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (min-width: 1280px) {
+    .media-grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+.media-grid-5 {
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+}
+@media (min-width: 480px) {
+    .media-grid-5 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (min-width: 768px) {
+    .media-grid-5 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (min-width: 1024px) {
+    .media-grid-5 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (min-width: 1400px) {
+    .media-grid-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}
+
+.media-grid-6 {
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+}
+@media (min-width: 480px) {
+    .media-grid-6 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (min-width: 640px) {
+    .media-grid-6 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (min-width: 1024px) {
+    .media-grid-6 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (min-width: 1280px) {
+    .media-grid-6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+}
+
+/* Контейнер картки: адаптується по більшій стороні без обрізання, пропорції та висота */
+.media-card-box {
+    position: relative;
+    width: 100%;
+    background-color: #020617;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    cursor: pointer;
+}
+
+/* Режими співвідношення сторін контейнера прев'ю */
+.aspect-box-auto { aspect-ratio: auto; min-height: 12rem; max-height: 32rem; }
+.aspect-box-16-9 { aspect-ratio: 16 / 9; }
+.aspect-box-4-3  { aspect-ratio: 4 / 3; }
+.aspect-box-1-1  { aspect-ratio: 1 / 1; }
+.aspect-box-3-4  { aspect-ratio: 3 / 4; }
+.aspect-box-9-16 { aspect-ratio: 9 / 16; }
+
+/* Динамічний розмір контейнера за бажанням користувача (compact, normal, large, huge) */
+.box-size-compact { height: 11rem; }
+.box-size-normal  { height: 16rem; }
+.box-size-large   { height: 22rem; }
+.box-size-huge    { height: 30rem; }
+
+/* Якщо вибрано 2 колонки на великому екрані і режим normal - збільшуємо висоту щоб фото розкрилося на максимум */
+.media-grid-2 .box-size-normal { height: 26rem; }
+.media-grid-3 .box-size-normal { height: 20rem; }
+
+.media-card-box img,
+.media-card-box video {
+    max-width: 100%;
+    max-height: 100%;
+    width: auto;
+    height: auto;
+    object-fit: contain; /* Зберігає пропорції без обрізання! */
+    transition: transform 0.25s ease;
+}
+
+.media-card-box:hover img {
+    transform: scale(1.025);
+}
+
