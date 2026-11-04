@@ -1,0 +1,13 @@
+.git
+.venv
+.env
+downloads/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+.tmux_tmp/
+.tmux_socket
+Проект.md

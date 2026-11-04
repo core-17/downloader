@@ -13,10 +13,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH=/app/src
 
 COPY pyproject.toml README.md ./
+COPY src/ ./src/
 
-# Якщо в системі встановлено uv, можна ставити через uv pip:
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -e .
 
-COPY src/ ./src/
 RUN mkdir -p /tmp/downloads && chmod 777 /tmp/downloads
