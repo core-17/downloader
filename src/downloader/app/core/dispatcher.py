@@ -119,10 +119,20 @@ class MediaDispatcher:
                 await self.storage.save_task_metadata(task_id, res)
             return res
 
-        # 0. Перевірка на Booru запит за тегами (наприклад: 'booru:landscape' або 'yande.re:genshin')
+        # 0. Перевірка на Booru запит за тегами (наприклад: 'booru:landscape' або 'yande.re:genshin?limit=5')
         if url.startswith(("booru:", "yande.re:")):
-            booru_tags = url.split(":", 1)[1].strip()
-            page_media = await self.booru_service.fetch_posts(tags=booru_tags, limit=10)
+            _, rest = url.split(":", 1)
+            booru_tags = rest.strip()
+            limit = 10
+            if "?" in booru_tags:
+                booru_tags, query_str = booru_tags.split("?", 1)
+                booru_tags = booru_tags.strip()
+                from urllib.parse import parse_qs
+                qs = parse_qs(query_str)
+                if "limit" in qs and qs["limit"][0].isdigit():
+                    limit = int(qs["limit"][0])
+
+            page_media = await self.booru_service.fetch_posts(tags=booru_tags, limit=limit)
             if page_media and page_media.items:
                 res = await self.direct.download_items(
                     task_id=task_id,

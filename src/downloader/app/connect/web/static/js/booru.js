@@ -16,6 +16,10 @@ window.createBooruModule = function ({ ref, currentTab }) {
     // Тумблер відображення у загальній стрічці: 'preview' або 'original'
     const booruViewMode = ref('preview');
 
+    // Пропорції та розмір контейнера прев'ю (16:9, 4:3, 1:1, 3:4, 9:16 або Auto)
+    const booruPreviewAspect = ref('auto');
+    const booruContainerSize = ref('normal');
+
     // Окремий тумблер для модального вікна: НЕ змінює показ усієї сітки при перемиканні в модалці!
     const booruModalViewMode = ref('original');
 
@@ -283,11 +287,25 @@ window.createBooruModule = function ({ ref, currentTab }) {
         }
     };
 
+    // Отримання CSS-класів для контейнера картки Booru залежно від налаштувань
+    const getBooruCardBoxClass = () => {
+        const classes = [];
+        if (booruPreviewAspect.value !== 'auto') {
+            classes.push(`aspect-box-${booruPreviewAspect.value}`);
+        } else {
+            classes.push(`box-size-${booruContainerSize.value}`);
+        }
+        return classes.join(' ');
+    };
+
     return {
         booruPosts,
         booruQuery,
         booruPerPage,
         booruCols,
+        booruPreviewAspect,
+        booruContainerSize,
+        getBooruCardBoxClass,
         isBooruLoading,
         hasMoreBooru,
         infiniteScrollEnabled,

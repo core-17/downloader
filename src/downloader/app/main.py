@@ -1,26 +1,38 @@
 import asyncio
+import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from downloader.app.connect.telegram.bot import run_bot
 from downloader.app.connect.web import STATIC_DIR, web_router
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Автоматично запускає Telegram-бота у фоні разом із веб-сервером (захищено файловим локом від дублювання)."""
-    bot_task = asyncio.create_task(run_bot(handle_signals=False))
+    """
+    Життєвий цикл веб-сервера.
+    Боти запускаються автономно в окремих tmux-сесіях для повної ізоляції:
+    один впав — решта живе без блокувань та синхронних залежностей.
+    Якщо встановлено RUN_EMBEDDED_BOTS=true — запускає ботів всередині процесу (legacy режим).
+    """
+    tasks = []
+    if os.getenv("RUN_EMBEDDED_BOTS", "false").lower() in ("true", "1", "yes"):
+        from downloader.app.connect.telegram.bot import run_bot
+        from downloader.app.connect.discord.bot import run_discord_bot
+        tasks.append(asyncio.create_task(run_bot(handle_signals=False)))
+        tasks.append(asyncio.create_task(run_discord_bot()))
+
     try:
         yield
     finally:
-        if not bot_task.done():
-            bot_task.cancel()
-            try:
-                await bot_task
-            except asyncio.CancelledError:
-                pass
+        for t in tasks:
+            if not t.done():
+                t.cancel()
+                try:
+                    await t
+                except asyncio.CancelledError:
+                    pass
 
 
 def create_app() -> FastAPI:

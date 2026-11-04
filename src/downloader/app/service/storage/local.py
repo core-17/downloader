@@ -54,6 +54,31 @@ class LocalVaultStorage(BaseStorageProvider):
             raise FileNotFoundError(f"Файл не знайдено: {relative_path}")
         return target
 
+    async def find_existing_file_by_name(self, filename: str) -> Path | None:
+        """
+        Перевіряє сховище на наявність файлу з ідентичною назвою (наприклад, yande.re_123456_... або video [ID].mp4).
+        Повертає абсолютний Path до існуючого файлу, якщо такий є.
+        """
+        if not filename:
+            return None
+        target_name = filename.strip().lower()
+        # Також перевіряємо чистий Booru ID (наприклад yande.re_123456)
+        booru_m = re.search(r"yande\.re_(\d+)", target_name)
+        booru_id = booru_m.group(1) if booru_m else None
+
+        base_resolved = self.base_dir.resolve()
+        for task_dir in base_resolved.iterdir():
+            if not task_dir.is_dir():
+                continue
+            for f in task_dir.iterdir():
+                if f.is_file() and f.name != META_FILENAME:
+                    f_lower = f.name.lower()
+                    if f_lower == target_name:
+                        return f
+                    if booru_id and f"yande.re_{booru_id}" in f_lower:
+                        return f
+        return None
+
     async def delete_file(self, relative_path: str) -> bool:
         """Видаляє вказаний файл зі сховища та очищає порожню папку задачі."""
         try:

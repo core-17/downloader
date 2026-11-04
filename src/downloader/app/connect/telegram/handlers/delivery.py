@@ -29,10 +29,28 @@ TELEGRAM_SAFE_PHOTO_MAX_BYTES = min(TELEGRAM_MAX_PHOTO_BYTES, 8 * 1024 * 1024)
 
 
 async def sync_progress(prog: TaskProgress) -> None:
-    """Синхронізує прогрес задачі між Telegram-ботом та веб-інтерфейсом (WebSocket)."""
+    """
+    Синхронізує прогрес задачі між Telegram-ботом та веб-інтерфейсом:
+    - Якщо в одному процесі — викликає broadcast_progress.
+    - Якщо бот запущений в окремому tmux-сеансі — асинхронно відправляє подію на веб-сервер без блокування.
+    """
     record_task(prog)
     try:
         await broadcast_progress(prog)
+    except Exception:
+        pass
+
+    # Асинхронний non-blocking ping веб-сервера через aiohttp (fire-and-forget)
+    try:
+        async def _notify_web():
+            try:
+                import aiohttp
+                timeout = aiohttp.ClientTimeout(total=0.8)
+                async with aiohttp.ClientSession(timeout=timeout) as session:
+                    await session.post("http://127.0.0.1:8000/api/v1/internal/broadcast", json=prog.model_dump(mode="json"))
+            except Exception:
+                pass
+        asyncio.create_task(_notify_web())
     except Exception:
         pass
 

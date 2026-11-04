@@ -63,7 +63,24 @@ class Settings(BaseSettings):
         description="Білий список Telegram ID. Парсить як рядок '123,456', так і JSON '[123, 456]'",
     )
 
-    @field_validator("TELEGRAM_ALLOWED_USERS", mode="before")
+    DISCORD_APPLICATION_ID: str = Field(
+        default="1567564374711738368",
+        description="ID програми Discord (Application ID)",
+    )
+    DISCORD_PUBLIC_KEY: str = Field(
+        default="ba9226a9c9f6224a878b81f33429cb9f974e102b94cc5c17ed055325f0ff18b4",
+        description="Публічний ключ програми Discord (Public Key)",
+    )
+    DISCORD_BOT_TOKEN: SecretStr | None = Field(
+        default=None,
+        description="Опціональний токен бота Discord. Якщо вказаний, Discord-бот стартує разом із сервером.",
+    )
+    DISCORD_ALLOWED_USERS: Annotated[List[int], NoDecode] = Field(
+        default_factory=list,
+        description="Білий список користувачів Discord (User ID). Якщо порожній — доступ відкрито для всіх.",
+    )
+
+    @field_validator("TELEGRAM_ALLOWED_USERS", "DISCORD_ALLOWED_USERS", mode="before")
     @classmethod
     def parse_allowed_users(cls, v: Any) -> list[int]:
         if v is None or v == "":

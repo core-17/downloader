@@ -286,9 +286,9 @@
             <div v-for="f in filteredVaultFiles" :key="f.relative_path"
                  class="bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-2xl overflow-hidden shadow-md flex flex-col justify-between group">
                 <div>
-                    <!-- Контейнер прев'ю медіа (адаптується по більшій стороні або пропорції 16/9, 4/3, 9/16 тощо) -->
+                    <!-- Контейнер прев'ю медіа (адаптується по більшій стороні або пропорції 16/9, 4/3, 9/16 з глобальним фітом) -->
                     <div class="media-card-box border-b border-slate-800/80"
-                         :class="getCardBoxClass()"
+                         :class="[getCardBoxClass(), 'media-fit-' + globalImageFit]"
                          @click="openModal(f)">
                         <img v-if="f.media_type === 'image'"
                              :src="f.view_url || ('/api/v1/files/view/' + encodeVaultPath(f.relative_path))"

@@ -180,6 +180,16 @@ class DirectStreamDownloader(BaseDownloader):
                             raw_name = item.title or title or Path(unquote(urlparse(str(resp.url)).path)).stem or "media"
                             safe_stem = sanitize_filename(raw_name, max_len=75)
                             filename = f"{safe_stem}{ext}"
+
+                            # 0. Перевірка на дублікат у сховищі (уникнення повторного завантаження ідентичних файлів)
+                            from downloader.app.connect.web.state import downloader as app_dispatcher
+                            existing_file = await app_dispatcher.storage.find_existing_file_by_name(filename)
+                            if existing_file and existing_file.exists() and existing_file.stat().st_size > 0:
+                                downloaded_files.append(existing_file)
+                                if len(items) == 1:
+                                    progress.media_type = detected_type
+                                continue
+
                             file_path = task_dir / filename
 
                             # Якщо файл з таким ім'ям вже існує (наприклад однакові назви у галереї), робимо унікальним

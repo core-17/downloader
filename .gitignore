@@ -10,3 +10,7 @@ wheels/
 .venv
 .env
 Проект.md
+
+# Temporary tmux runtime files
+.tmux_tmp/
+.tmux_socket

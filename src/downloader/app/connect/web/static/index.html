@@ -70,6 +70,23 @@
                 <span>📋 Історія</span>
                 <span class="px-1.5 py-0.2 text-[11px] rounded-full bg-black/30">{{ allTasksList.length }}</span>
             </button>
+
+            <!-- Глобальний тумблер підгонки зображень під контейнер (розтягування по більшій стороні) для всіх вкладок -->
+            <div class="ml-auto flex items-center gap-1.5 bg-slate-950/80 border border-slate-800 px-2.5 py-1 rounded-xl text-xs">
+                <span class="text-slate-400 hidden md:inline text-[11px] font-medium">🖼️ Фіт прев'ю:</span>
+                <button type="button" @click="setGlobalImageFit('contain')"
+                        :class="globalImageFit === 'contain' ? 'bg-indigo-600 text-white font-bold shadow' : 'text-slate-400 hover:text-white'"
+                        title="Масштабувати по більшій стороні під розмір контейнера без обрізання"
+                        class="px-2 py-0.5 rounded-lg transition text-[11px]">
+                    Масштабувати (без обрізання)
+                </button>
+                <button type="button" @click="setGlobalImageFit('cover')"
+                        :class="globalImageFit === 'cover' ? 'bg-indigo-600 text-white font-bold shadow' : 'text-slate-400 hover:text-white'"
+                        title="Заповнити повністю з обрізанням країв"
+                        class="px-2 py-0.5 rounded-lg transition text-[11px]">
+                    Заповнити (обрізати)
+                </button>
+            </div>
         </div>
     </header>
 

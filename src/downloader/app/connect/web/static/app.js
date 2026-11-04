@@ -6,6 +6,18 @@ createApp({
         const isNavVisible = ref(true);
         let lastScrollY = 0;
 
+        // Єдине глобальне налаштування масштабування/заповнення прев'ю для всіх вкладок
+        // За замовчуванням 'contain' - розтягування по більшій стороні під розмір контейнера без обрізання
+        const savedFit = localStorage.getItem('app_global_image_fit_v2') || 'contain';
+        const globalImageFit = ref(savedFit);
+
+        const setGlobalImageFit = (mode) => {
+            globalImageFit.value = mode;
+            try {
+                localStorage.setItem('app_global_image_fit_v2', mode);
+            } catch (e) {}
+        };
+
         const onWindowScroll = () => {
             const currentY = window.pageYOffset || document.documentElement.scrollTop;
             if (currentY < 60) {
@@ -69,6 +81,8 @@ createApp({
         return {
             currentTab,
             isNavVisible,
+            globalImageFit,
+            setGlobalImageFit,
             refreshAll,
             ...window.AppUtils,
             ...tasksModule,
