@@ -83,7 +83,7 @@ async def cmd_booru(message: Message) -> None:
         if new_paths:
             res.file_path = new_paths[0]
 
-    res.tags = ["yande.re", *[t for t in booru_tags.split() if t]]
+    res.tags = list(dict.fromkeys(["telegram", "tg", "booru", "yande.re", *[t for t in booru_tags.split() if t]]))
     await dispatcher.storage.save_task_metadata(task_id, res)
     await sync_progress(res)
 

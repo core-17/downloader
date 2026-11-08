@@ -1,28 +1,28 @@
 <!-- ==================== ВКЛАДКА 4: ІСТОРІЯ ЗАДАЧ (З ЛІВОЮ ПАНЕЛЛЮ ФІЛЬТРІВ) ==================== -->
-<div v-if="currentTab === 'history'" class="mt-6 flex flex-col lg:flex-row gap-6 items-start">
+<div v-if="currentTab === 'history'" class="mt-4 sm:mt-6 flex flex-col lg:flex-row gap-5 lg:gap-6 items-start">
 
     <!-- ЛІВА БІЧНА ПАНЕЛЬ ФІЛЬТРІВ ІСТОРІЇ (Sticky + Власний скрол) -->
     <aside :class="{ 'top-4': !isNavVisible, 'top-24': isNavVisible }"
-           class="filter-sidebar w-full lg:w-72 shrink-0 bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-5">
+           class="filter-sidebar w-full lg:w-72 shrink-0 bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-4">
         <div class="flex items-center justify-between border-b border-slate-800 pb-3">
             <h3 class="text-sm font-bold text-white flex items-center gap-2">
-                📜 Фільтри історії
+                📜 {{ t('history_filters_title') }}
             </h3>
             <button v-if="hasActiveHistoryFilters"
                     @click="resetHistoryFilters"
                     class="text-xs text-rose-400 hover:text-rose-300 font-medium">
-                Скинути всі
+                {{ t('btn_reset_all') }}
             </button>
         </div>
 
         <!-- Пошук по історії -->
         <div class="space-y-1.5">
             <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
-                Пошук задач
+                {{ t('history_search_title') }}
             </span>
             <div class="relative">
                 <input v-model="historySearch" type="text"
-                       placeholder="Назва, посилання, тег..."
+                       :placeholder="t('history_search_placeholder')"
                        class="w-full pl-3 pr-8 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none">
                 <button v-if="historySearch" @click="historySearch = ''"
                         class="absolute right-2.5 top-2 text-slate-400 hover:text-white text-xs">✕</button>
@@ -32,7 +32,7 @@
         <!-- Фільтр за статусом задачі -->
         <div class="space-y-2">
             <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
-                Статус задачі
+                {{ t('task_status_title') }}
             </span>
             <div class="space-y-1">
                 <button type="button"
@@ -41,7 +41,7 @@
                             ? 'bg-blue-600 text-white border-blue-500'
                             : 'bg-slate-950/70 text-slate-300 hover:bg-slate-800 border-slate-800'"
                         class="w-full px-3 py-2 rounded-xl text-xs font-medium border flex items-center justify-between transition">
-                    <span>🌐 Усі статуси</span>
+                    <span>🌐 {{ t('status_all') }}</span>
                 </button>
                 <button type="button"
                         @click="historyStatusFilter = 'completed'"
@@ -49,7 +49,7 @@
                             ? 'bg-emerald-600 text-white border-emerald-500'
                             : 'bg-slate-950/70 text-slate-300 hover:bg-slate-800 border-slate-800'"
                         class="w-full px-3 py-2 rounded-xl text-xs font-medium border flex items-center justify-between transition">
-                    <span>✅ Завершені</span>
+                    <span>✅ {{ t('status_completed') }}</span>
                 </button>
                 <button type="button"
                         @click="historyStatusFilter = 'downloading'"
@@ -57,7 +57,7 @@
                             ? 'bg-amber-600 text-white border-amber-500'
                             : 'bg-slate-950/70 text-slate-300 hover:bg-slate-800 border-slate-800'"
                         class="w-full px-3 py-2 rounded-xl text-xs font-medium border flex items-center justify-between transition">
-                    <span>⏳ В процесі</span>
+                    <span>⏳ {{ t('status_in_progress') }}</span>
                 </button>
                 <button type="button"
                         @click="historyStatusFilter = 'failed'"
@@ -65,32 +65,32 @@
                             ? 'bg-rose-600 text-white border-rose-500'
                             : 'bg-slate-950/70 text-slate-300 hover:bg-slate-800 border-slate-800'"
                         class="w-full px-3 py-2 rounded-xl text-xs font-medium border flex items-center justify-between transition">
-                    <span>❌ Помилки</span>
+                    <span>❌ {{ t('status_failed') }}</span>
                 </button>
             </div>
         </div>
 
         <!-- Статистика історії -->
         <div class="pt-3 border-t border-slate-800 text-[11px] text-slate-400 space-y-1">
-            <div>Знайдено задач: <b class="text-white">{{ allTasksList.length }}</b></div>
+            <div>{{ t('tasks_found_stat', { count: allTasksList.length }) }}</div>
         </div>
     </aside>
 
     <!-- ПРАВА ОСНОВНА ОБЛАСТЬ ТАБЛИЦІ ІСТОРІЇ -->
     <div class="flex-1 w-full space-y-4">
         <div v-if="allTasksList.length === 0" class="bg-slate-900/40 border border-slate-800 rounded-2xl p-10 text-center text-slate-500 text-sm">
-            За вказаними критеріями задач не знайдено.
+            {{ t('no_history_tasks') }}
         </div>
 
         <div v-else class="overflow-x-auto bg-slate-900 border border-slate-800 rounded-2xl">
             <table class="w-full text-left border-collapse text-sm">
                 <thead>
                     <tr class="border-b border-slate-800 text-xs text-slate-400 uppercase">
-                        <th class="py-3.5 px-4">ID</th>
-                        <th class="py-3.5 px-4">Назва / Джерело</th>
-                        <th class="py-3.5 px-4">Теги</th>
-                        <th class="py-3.5 px-4">Статус</th>
-                        <th class="py-3.5 px-4 text-right">Дія</th>
+                        <th class="py-3.5 px-4">{{ t('th_id') }}</th>
+                        <th class="py-3.5 px-4">{{ t('th_title') }}</th>
+                        <th class="py-3.5 px-4">{{ t('th_tags') }}</th>
+                        <th class="py-3.5 px-4">{{ t('th_status') }}</th>
+                        <th class="py-3.5 px-4 text-right">{{ t('th_action') }}</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-800/70">
@@ -119,12 +119,12 @@
                                :href="'/api/v1/files/view/' + t.task_id + '/' + encodeURIComponent(t.file_path.split('/').pop())"
                                target="_blank"
                                class="text-xs font-semibold text-emerald-400 hover:text-emerald-300">
-                                👁️ Переглянути
+                                👁️ {{ t('btn_preview') }}
                             </a>
                             <a v-if="t.status === 'completed' && t.file_path"
                                :href="'/api/v1/files/download/' + t.task_id + '/' + encodeURIComponent(t.file_path.split('/').pop())"
                                class="text-xs font-semibold text-blue-400 hover:text-blue-300">
-                                ⬇ Скачати
+                                ⬇ {{ t('btn_download') }}
                             </a>
                         </td>
                     </tr>

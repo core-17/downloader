@@ -1,5 +1,6 @@
 import asyncio
 from pathlib import Path
+import re
 import time
 from typing import Any
 import yt_dlp
@@ -28,6 +29,7 @@ class YtDlpDownloader(BaseDownloader):
         max_height: int = 1080,
         on_progress: ProgressCallback | None = None,
         audio_only: bool = False,
+        download_playlist: bool = True,
         **kwargs,
     ) -> TaskProgress:
         progress = TaskProgress(
@@ -46,7 +48,7 @@ class YtDlpDownloader(BaseDownloader):
                 if on_progress:
                     await on_progress(progress)
 
-                files, title, description, extractor = await asyncio.to_thread(
+                files, title, description, extractor, files_meta, playlist_title = await asyncio.to_thread(
                     self._sync_download_worker,
                     task_id,
                     url,
@@ -55,6 +57,7 @@ class YtDlpDownloader(BaseDownloader):
                     progress,
                     loop,
                     on_progress,
+                    download_playlist,
                 )
 
                 if not files:
@@ -65,6 +68,14 @@ class YtDlpDownloader(BaseDownloader):
                 progress.source_platform = extractor
                 progress.file_path = str(files[0])
                 progress.file_paths = [str(f) for f in files]
+                progress.files_meta = files_meta
+
+                # Якщо завантажено плейлист, додаємо назву плейлиста до загальних тегів задачі
+                if playlist_title:
+                    clean_p = re.sub(r"[^\w\s-]", "", playlist_title).strip().lower().replace(" ", "_")
+                    clean_p = clean_p[:60]
+                    if clean_p and clean_p not in progress.tags:
+                        progress.tags.append(clean_p)
 
                 first_ext = files[0].suffix.lower()
                 if audio_only or first_ext in AUDIO_EXTENSIONS:
@@ -101,7 +112,8 @@ class YtDlpDownloader(BaseDownloader):
         progress: TaskProgress,
         loop: asyncio.AbstractEventLoop,
         on_progress: ProgressCallback | None,
-    ) -> tuple[list[Path], str, str | None, str | None]:
+        download_playlist: bool = True,
+    ) -> tuple[list[Path], str, str | None, str | None, dict[str, Any], str | None]:
         task_dir = self.temp_dir / task_id
         task_dir.mkdir(parents=True, exist_ok=True)
         last_emit = 0.0
@@ -120,11 +132,21 @@ class YtDlpDownloader(BaseDownloader):
                 downloaded = d.get("downloaded_bytes", 0) or 0
                 total = d.get("total_bytes") or d.get("total_bytes_estimate")
                 speed = d.get("speed")
+                p_idx = info_dict.get("playlist_index")
+                p_count = info_dict.get("playlist_count") or info_dict.get("n_entries")
 
-                progress.downloaded_mb = round(downloaded / (1024 * 1024), 2)
-                if total and total > 0:
-                    progress.total_mb = round(total / (1024 * 1024), 2)
-                    progress.percent = min(99.9, round((downloaded / total) * 100, 1))
+                if p_idx and p_count:
+                    v_title = info_dict.get("title") or ""
+                    progress.description = f"[{p_idx}/{p_count}] {v_title[:55]}"
+                    if total and total > 0:
+                        v_percent = min(100.0, (downloaded / total) * 100)
+                        progress.percent = min(99.9, round(((p_idx - 1) / p_count) * 100 + (v_percent / p_count), 1))
+                    else:
+                        progress.percent = min(99.9, round(((p_idx - 1) / p_count) * 100, 1))
+                else:
+                    if total and total > 0:
+                        progress.percent = min(99.9, round((downloaded / total) * 100, 1))
+
                 if speed:
                     progress.speed_mb_s = round(speed / (1024 * 1024), 2)
                 eta = d.get("eta")
@@ -141,17 +163,19 @@ class YtDlpDownloader(BaseDownloader):
                 if on_progress:
                     asyncio.run_coroutine_threadsafe(on_progress(progress), loop)
 
+        outtmpl_pattern = str(task_dir / "%(playlist_index&{:04d} - |)s%(title).80B [%(id)s].%(ext)s")
+
         if audio_only:
             ydl_opts: dict[str, Any] = {
                 "format": "bestaudio/best",
-                "outtmpl": str(task_dir / "%(title).80B [%(id)s].%(ext)s"),
-                "noplaylist": True,
+                "outtmpl": outtmpl_pattern,
+                "noplaylist": not download_playlist,
                 "continuedl": True,
                 "nopart": False,
                 "progress_hooks": [ytdlp_hook],
                 "quiet": True,
                 "no_warnings": True,
-                "ignoreerrors": False,
+                "ignoreerrors": True,
                 "http_headers": {"User-Agent": DEFAULT_USER_AGENT},
                 "postprocessors": [
                     {
@@ -173,15 +197,15 @@ class YtDlpDownloader(BaseDownloader):
                 )
             ydl_opts = {
                 "format": fmt_selector,
-                "outtmpl": str(task_dir / "%(title).80B [%(id)s].%(ext)s"),
+                "outtmpl": outtmpl_pattern,
                 "merge_output_format": "mp4",
-                "noplaylist": True,
+                "noplaylist": not download_playlist,
                 "continuedl": True,
                 "nopart": False,
                 "progress_hooks": [ytdlp_hook],
                 "quiet": True,
                 "no_warnings": True,
-                "ignoreerrors": False,
+                "ignoreerrors": True,
                 "http_headers": {"User-Agent": DEFAULT_USER_AGENT},
             }
 
@@ -190,20 +214,22 @@ class YtDlpDownloader(BaseDownloader):
             if not info:
                 raise RuntimeError("Не вдалося отримати метадані через yt-dlp")
 
-            title = info.get("title") or info.get("description") or "Media"
+            is_playlist = info.get("_type") == "playlist" or bool(info.get("entries"))
+            playlist_title = info.get("title") if is_playlist else (info.get("playlist_title") or None)
+            title = playlist_title or info.get("title") or info.get("description") or "Media"
             description = info.get("description")
             extractor = info.get("extractor_key") or info.get("extractor")
 
-            # Збираємо всі реальні завантажені файли у папці задачі
+            # Збираємо всі завантажені файли у папці задачі, відсортовані за назвою (0001, 0002...)
             downloaded_files = sorted(
                 [
                     p
                     for p in task_dir.iterdir()
                     if p.is_file()
-                    and not p.name.endswith((".part", ".ytdl", ".temp"))
+                    and not p.name.endswith((".part", ".ytdl", ".temp", ".json"))
                     and p.stat().st_size > 0
                 ],
-                key=lambda p: p.stat().st_mtime,
+                key=lambda p: p.name,
             )
 
             if not downloaded_files:
@@ -214,4 +240,33 @@ class YtDlpDownloader(BaseDownloader):
                 elif Path(filename).exists():
                     downloaded_files = [Path(filename)]
 
-            return downloaded_files, str(title)[:200], description, extractor
+            # Формуємо метадані для кожного файлу: назва плейлиста та порядковий тег (0001, 0002...)
+            files_meta: dict[str, Any] = {}
+            clean_playlist_tag = None
+            if playlist_title:
+                clean_playlist_tag = re.sub(r"[^\w\s-]", "", playlist_title).strip().lower().replace(" ", "_")
+                clean_playlist_tag = clean_playlist_tag[:60]
+
+            for idx, file_path in enumerate(downloaded_files, start=1):
+                fname = file_path.name
+                match = re.match(r"^(\d{4})[-_\s]", fname)
+                if match:
+                    item_idx_str = match.group(1)
+                elif is_playlist or len(downloaded_files) > 1:
+                    item_idx_str = f"{idx:04d}"
+                else:
+                    item_idx_str = None
+
+                item_tags: list[str] = []
+                if clean_playlist_tag:
+                    item_tags.append(clean_playlist_tag)
+                if item_idx_str:
+                    item_tags.append(item_idx_str)
+
+                files_meta[fname] = {
+                    "tags": item_tags,
+                    "playlist_index": int(item_idx_str) if item_idx_str and item_idx_str.isdigit() else idx,
+                    "playlist_title": playlist_title,
+                }
+
+            return downloaded_files, str(title)[:200], description, extractor, files_meta, playlist_title

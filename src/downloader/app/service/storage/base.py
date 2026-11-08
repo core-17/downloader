@@ -34,3 +34,7 @@ class BaseStorageProvider(ABC):
     async def delete_file(self, relative_path: str) -> bool:
         raise NotImplementedError
 
+    @abstractmethod
+    async def update_file_tags(self, relative_path: str, tags: list[str]) -> list[str]:
+        raise NotImplementedError
+

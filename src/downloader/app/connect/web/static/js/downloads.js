@@ -10,6 +10,7 @@ window.createDownloadsModule = function ({ ref, onFilesUploaded }) {
         urls: '',
         max_height: 1080,
         audio_only: false,
+        download_playlist: true,
         tagsInput: '',
         image_format: 'original',
         image_max_side: null
@@ -56,7 +57,8 @@ window.createDownloadsModule = function ({ ref, onFilesUploaded }) {
                 await onFilesUploaded();
             }
         } catch (e) {
-            alert('Помилка завантаження файлу: ' + e);
+            const prefix = window.t ? window.t('err_upload_file') : 'Помилка завантаження файлу: ';
+            alert(prefix + e);
         } finally {
             isUploading.value = false;
         }
@@ -83,6 +85,7 @@ window.createDownloadsModule = function ({ ref, onFilesUploaded }) {
                     url: targetUrl,
                     max_height: form.value.max_height,
                     audio_only: form.value.audio_only,
+                    download_playlist: form.value.download_playlist,
                     tags: tags,
                     image_format: form.value.image_format,
                     image_max_side: form.value.image_max_side
@@ -105,7 +108,8 @@ window.createDownloadsModule = function ({ ref, onFilesUploaded }) {
 
             form.value.tagsInput = '';
         } catch (e) {
-            alert('Помилка запуску: ' + e);
+            const prefix = window.t ? window.t('err_start_task') : 'Помилка запуску: ';
+            alert(prefix + e);
         } finally {
             isSubmitting.value = false;
         }

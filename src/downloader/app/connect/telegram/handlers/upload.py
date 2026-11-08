@@ -112,6 +112,9 @@ async def handle_direct_media_upload(message: Message) -> None:
         actual_size = dest_path.stat().st_size if dest_path.exists() else file_size
         mb_val = round(actual_size / (1024 * 1024), 2) if actual_size else 0.0
 
+        # Завжди маркуємо тип підключення у тегах
+        effective_tags = list(dict.fromkeys(["telegram", "tg", "tg_upload", *(tags or [])]))
+
         prog = TaskProgress(
             task_id=task_id,
             url="telegram:upload",
@@ -121,7 +124,7 @@ async def handle_direct_media_upload(message: Message) -> None:
             title=safe_filename,
             file_path=str(dest_path),
             file_paths=[str(dest_path)],
-            tags=tags,
+            tags=effective_tags,
             percent=100.0,
             downloaded_mb=mb_val,
             total_mb=mb_val,

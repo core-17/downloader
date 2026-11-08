@@ -1,0 +1,77 @@
+{
+  "active_account_id": "account_1",
+  "accounts": [
+    {
+      "id": "account_1",
+      "username": "account_1",
+      "display_name": "Акаунт 1",
+      "avatar_emoji": "👤",
+      "created_at": 1794071048.4694211,
+      "safe_mode_default": false,
+      "custom_nsfw_tags": [],
+      "api_keys": {
+        "gelbooru_user_id": "",
+        "gelbooru_api_key": "",
+        "yandere_login": "",
+        "yandere_api_key": "",
+        "konachan_login": "",
+        "konachan_api_key": "",
+        "zerochan_username": "",
+        "social_cookies": ""
+      },
+      "bots": {
+        "telegram_user_ids": [
+          1285593934
+        ],
+        "discord_user_ids": [
+          499984633711165440
+        ],
+        "telegram_bot_token": "",
+        "discord_bot_token": "",
+        "social_login_handle": "@user"
+      },
+      "storage": {
+        "backend": "s3",
+        "s3_bucket": "vault",
+        "s3_prefix": "",
+        "s3_endpoint": "",
+        "s3_access_key": "",
+        "s3_secret_key": ""
+      }
+    },
+    {
+      "id": "account_2",
+      "username": "account_2",
+      "display_name": "Акаунт 2",
+      "avatar_emoji": "📁",
+      "created_at": 1794071048.469428,
+      "safe_mode_default": false,
+      "custom_nsfw_tags": [],
+      "api_keys": {
+        "gelbooru_user_id": "",
+        "gelbooru_api_key": "",
+        "yandere_login": "",
+        "yandere_api_key": "",
+        "konachan_login": "",
+        "konachan_api_key": "",
+        "zerochan_username": "",
+        "social_cookies": ""
+      },
+      "bots": {
+        "telegram_user_ids": [],
+        "discord_user_ids": [],
+        "telegram_bot_token": "",
+        "discord_bot_token": "",
+        "social_login_handle": ""
+      },
+      "storage": {
+        "backend": "s3",
+        "s3_bucket": "vault",
+        "s3_prefix": "account_2",
+        "s3_endpoint": "",
+        "s3_access_key": "",
+        "s3_secret_key": ""
+      }
+    }
+  ]
+}

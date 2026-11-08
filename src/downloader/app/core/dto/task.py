@@ -1,4 +1,5 @@
 from enum import Enum
+from typing import Any
 from pydantic import BaseModel, Field, HttpUrl
 
 
@@ -21,6 +22,8 @@ class DownloadRequest(BaseModel):
     # Налаштування для обробки зображень
     image_format: str = Field(default="original", description="Формат збереження зображень: original, jpg, png, webp, avif")
     image_max_side: int | None = Field(default=None, description="Максимальний розмір по більшій стороні (пікселів)")
+    source_platform: str | None = Field(default=None, description="Платформа-джерело або назва сайту")
+    download_playlist: bool = Field(default=True, description="Завантажувати весь плейлист, якщо це посилання на плейлист")
 
 
 class BooruDownloadRequest(BaseModel):
@@ -31,6 +34,15 @@ class BooruDownloadRequest(BaseModel):
     image_format: str = Field(default="original", description="Формат: original, jpg, png, webp, avif")
     image_max_side: int | None = Field(default=None, description="Максимальний розмір по більшій стороні")
     user_tags: list[str] = Field(default_factory=list, description="Додаткові теги користувача для архіву")
+    provider: str = Field(default="yande.re", description="Джерело Booru: yande.re, konachan, safebooru, zerochan")
+    safe_mode: bool = Field(default=False, description="Безпечний режим (Safe Mode)")
+    safe_tags: str | None = Field(default=None, description="Кастомні теги безпечного режиму")
+    non_safe_tags: str | None = Field(default=None, description="Кастомні теги звичайного режиму")
+
+
+class UpdateFileTagsRequest(BaseModel):
+    relative_path: str = Field(..., description="Відносний шлях файлу в сховищі")
+    tags: list[str] = Field(default_factory=list, description="Оновлений список тегів")
 
 
 class TaskProgress(BaseModel):
@@ -48,5 +60,6 @@ class TaskProgress(BaseModel):
     eta_seconds: int | None = None
     file_path: str | None = None
     file_paths: list[str] = Field(default_factory=list)
+    files_meta: dict[str, Any] = Field(default_factory=dict, description="Метадані окремих файлів (індекси, теги плейлиста)")
     tags: list[str] = Field(default_factory=list)
     error: str | None = None

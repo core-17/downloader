@@ -15,6 +15,7 @@ from downloader.app.config.constants import (
     VIDEO_EXTENSIONS,
 )
 from downloader.app.core.dto.task import TaskProgress, TaskStatus
+from downloader.app.core.platforms import detect_source_platform, get_image_dimensions
 from downloader.app.service.download.base import sanitize_filename
 from downloader.app.service.storage.base import BaseStorageProvider, VaultFileItem
 
@@ -62,8 +63,8 @@ class LocalVaultStorage(BaseStorageProvider):
         if not filename:
             return None
         target_name = filename.strip().lower()
-        # Також перевіряємо чистий Booru ID (наприклад yande.re_123456)
-        booru_m = re.search(r"yande\.re_(\d+)", target_name)
+        # Також перевіряємо чистий Booru ID для всіх провайдерів (yande.re, konachan, safebooru, zerochan, gelbooru)
+        booru_m = re.search(r"(?:yande[_\.]?re|konachan|safebooru|zerochan|gelbooru)[_\.](\d+)", target_name, re.I)
         booru_id = booru_m.group(1) if booru_m else None
 
         base_resolved = self.base_dir.resolve()
@@ -75,8 +76,10 @@ class LocalVaultStorage(BaseStorageProvider):
                     f_lower = f.name.lower()
                     if f_lower == target_name:
                         return f
-                    if booru_id and f"yande.re_{booru_id}" in f_lower:
-                        return f
+                    if booru_id:
+                        f_booru = re.search(r"(?:yande[_\.]?re|konachan|safebooru|zerochan|gelbooru)[_\.](\d+)", f_lower, re.I)
+                        if f_booru and f_booru.group(1) == booru_id:
+                            return f
         return None
 
     async def delete_file(self, relative_path: str) -> bool:
@@ -130,6 +133,40 @@ class LocalVaultStorage(BaseStorageProvider):
                 await f.write(json.dumps(payload, ensure_ascii=False, indent=2))
         except Exception:
             pass
+
+    async def update_file_tags(self, relative_path: str, tags: list[str]) -> list[str]:
+        """Оновлює або редагує список тегів файлу в локальному сховищі."""
+        clean_tags = sorted(list({
+            str(t).strip().lower().lstrip("#")
+            for t in tags
+            if str(t).strip() and len(str(t).strip()) >= 2
+        }))
+
+        parts = relative_path.split("/")
+        task_id = parts[0] if len(parts) > 1 else ""
+
+        if task_id:
+            task_dir = self.base_dir / task_id
+            task_dir.mkdir(parents=True, exist_ok=True)
+            meta_path = task_dir / META_FILENAME
+        else:
+            meta_path = self.base_dir / f"{relative_path}.meta.json"
+
+        meta_data: dict[str, Any] = {}
+        if meta_path.exists():
+            try:
+                meta_data = json.loads(meta_path.read_text(encoding="utf-8"))
+            except Exception:
+                meta_data = {}
+
+        meta_data["tags"] = clean_tags
+        meta_data["updated_at"] = time.time()
+        try:
+            meta_path.write_text(json.dumps(meta_data, ensure_ascii=False, indent=2), encoding="utf-8")
+        except Exception as exc:
+            logger.warning("Не вдалося оновити .meta.json: %s", exc)
+
+        return clean_tags
 
     async def save_uploaded_base64_file(
         self,
@@ -200,6 +237,8 @@ class LocalVaultStorage(BaseStorageProvider):
 
             meta = meta_cache[dir_key]
 
+            files_meta = meta.get("files_meta") or {}
+
             for f in files:
                 if f.startswith(".") or f.endswith((".part", ".ytdl", ".temp", ".json")):
                     continue
@@ -212,12 +251,33 @@ class LocalVaultStorage(BaseStorageProvider):
                     ext = full_path.suffix.lower().lstrip(".")
                     mtype = detect_media_type(ext)
 
+                    file_meta = files_meta.get(f) or {}
+
                     raw_tags = meta.get("tags") or []
                     tags_set: set[str] = set()
                     for t in raw_tags:
                         clean = str(t).strip().lower().lstrip("#")
                         if clean and len(clean) >= 2:
                             tags_set.add(clean)
+
+                    # Додаємо індивідуальні теги конкретного файлу з files_meta (наприклад, номер 0001)
+                    if file_meta and "tags" in file_meta:
+                        for t in file_meta["tags"]:
+                            clean = str(t).strip().lower().lstrip("#")
+                            if clean:
+                                tags_set.add(clean)
+
+                    # Якщо назва файлу починається з 4 цифр (0001, 0002...), гарантовано додаємо тег номера
+                    match_idx = re.match(r"^(\d{4})[-_\s]", f)
+                    if match_idx:
+                        tags_set.add(match_idx.group(1))
+
+                    # Якщо у метаданих є плейлист, додаємо тег назви плейлиста
+                    p_title = meta.get("playlist_title") or file_meta.get("playlist_title")
+                    if p_title:
+                        clean_p = re.sub(r"[^\w\s-]", "", p_title).strip().lower().replace(" ", "_")
+                        if clean_p and len(clean_p) >= 2:
+                            tags_set.add(clean_p)
 
                     # Якщо це окремий файл із назвою виду yande.re_<id>_<tags>, витягуємо його власні точні теги
                     if "yande.re" in f.lower():
@@ -234,6 +294,18 @@ class LocalVaultStorage(BaseStorageProvider):
                     # Безпечне кодування шляху для браузера, щоб символи '#', '?' тощо не ломали URL
                     safe_url_path = "/".join(quote(part) for part in rel_path.split("/"))
 
+                    effective_platform = detect_source_platform(
+                        url=meta.get("url"),
+                        name=meta.get("title") or f,
+                        tags=tags_list,
+                        existing_platform=meta.get("source_platform"),
+                    )
+
+                    w = meta.get("width")
+                    h = meta.get("height")
+                    if (not w or not h) and mtype == "image":
+                        w, h = get_image_dimensions(full_path)
+
                     items.append(
                         VaultFileItem(
                             name=f,
@@ -245,10 +317,10 @@ class LocalVaultStorage(BaseStorageProvider):
                             modified_ts=stat.st_mtime,
                             media_type=mtype,
                             source_url=meta.get("url"),
-                            source_platform=meta.get("source_platform"),
+                            source_platform=effective_platform,
                             tags=tags_list,
-                            width=meta.get("width"),
-                            height=meta.get("height"),
+                            width=w,
+                            height=h,
                             view_url=f"/api/v1/files/view/{safe_url_path}",
                             download_url=f"/api/v1/files/download/{safe_url_path}",
                         )

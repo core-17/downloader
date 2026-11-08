@@ -1,19 +1,31 @@
 // Ізольований модуль локального сховища (Vault): ліва панель фільтрів, підкатегорії, вибір колонок, пошук, сортування та плеєр
-window.createVaultModule = function ({ ref, computed }) {
+window.createVaultModule = function ({ ref, computed, watch }) {
     const vaultFiles = ref([]);
     const vaultSearch = ref('');
-    const vaultCols = ref(3); // Кількість колонок у рядку для сховища (2, 3, 4, 5, 6)
+    const vaultCols = ref(Number(localStorage.getItem('app_vault_cols')) || 3); // Кількість колонок у рядку для сховища (1..8)
     const previewAspect = ref('auto'); // auto, 16-9, 4-3, 1-1, 3-4, 9-16
-    const containerSize = ref('normal'); // compact, normal, large, huge
+    const containerHeight = ref(Number(localStorage.getItem('app_vault_container_height')) || 280);
+    const containerSize = ref('normal');
     const selectedFilePaths = ref([]); // Вибрані чекбоксами файли для масових дій
     const isExportingZip = ref(false);
+
+    if (watch) {
+        watch(vaultCols, (val) => {
+            try { localStorage.setItem('app_vault_cols', String(val)); } catch (e) {}
+        });
+        watch(containerHeight, (val) => {
+            try { localStorage.setItem('app_vault_container_height', String(val)); } catch (e) {}
+        });
+    }
     const selectedCategories = ref([]);
     const selectedExts = ref([]);
     const selectedPlatforms = ref([]);
     const selectedVaultTags = ref([]);
     const vaultTagSearch = ref(''); // Пошук/фільтрація збережених тегів у лівій панелі
     const sortBy = ref('date_desc');
+    const selectedOrientation = ref('all'); // all, landscape, portrait, square
     const modalFile = ref(null);
+    const isMobileVaultFiltersOpen = ref(false); // Стан мобільного висувного меню фільтрів
 
     const categoryTree = [
         {
@@ -114,19 +126,68 @@ window.createVaultModule = function ({ ref, computed }) {
         return sum.toFixed(2);
     });
 
+    const activeFiltersList = computed(() => {
+        const list = [];
+        selectedCategories.value.forEach(catId => {
+            const cat = categoryTree.find(c => c.id === catId);
+            const label = cat ? `${cat.icon} ${window.t ? (window.t('cat_' + cat.id) || cat.label) : cat.label}` : catId;
+            list.push({ key: 'cat_' + catId, type: 'category', value: catId, label });
+        });
+        selectedExts.value.forEach(ext => {
+            list.push({ key: 'ext_' + ext, type: 'ext', value: ext, label: `.${ext}` });
+        });
+        selectedPlatforms.value.forEach(plat => {
+            list.push({ key: 'plat_' + plat, type: 'platform', value: plat, label: plat });
+        });
+        selectedVaultTags.value.forEach(tag => {
+            list.push({ key: 'tag_' + tag, type: 'tag', value: tag, label: `#${tag}` });
+        });
+        if (selectedOrientation.value !== 'all') {
+            const labelMap = {
+                landscape: '🖼️ ' + (window.t ? window.t('orientation_landscape') : 'Альбомна'),
+                portrait: '📱 ' + (window.t ? window.t('orientation_portrait') : 'Портретна'),
+                square: '⏹️ ' + (window.t ? window.t('orientation_square') : 'Квадратна')
+            };
+            list.push({
+                key: 'orientation',
+                type: 'orientation',
+                value: selectedOrientation.value,
+                label: labelMap[selectedOrientation.value] || selectedOrientation.value
+            });
+        }
+        if (vaultSearch.value.trim()) {
+            list.push({ key: 'search', type: 'search', value: vaultSearch.value.trim(), label: `🔍 "${vaultSearch.value.trim()}"` });
+        }
+        return list;
+    });
+
+    const activeFiltersCount = computed(() => activeFiltersList.value.length);
+
+    const removeFilter = (item) => {
+        if (!item) return;
+        if (item.type === 'category') {
+            selectedCategories.value = selectedCategories.value.filter(c => c !== item.value);
+        } else if (item.type === 'ext') {
+            selectedExts.value = selectedExts.value.filter(e => e !== item.value);
+        } else if (item.type === 'orientation') {
+            selectedOrientation.value = 'all';
+        } else if (item.type === 'platform') {
+            selectedPlatforms.value = selectedPlatforms.value.filter(p => p !== item.value);
+        } else if (item.type === 'tag') {
+            selectedVaultTags.value = selectedVaultTags.value.filter(t => t !== item.value);
+        } else if (item.type === 'search') {
+            vaultSearch.value = '';
+        }
+    };
+
     const hasActiveVaultFilters = computed(() => {
-        return (
-            selectedCategories.value.length > 0 ||
-            selectedExts.value.length > 0 ||
-            selectedPlatforms.value.length > 0 ||
-            selectedVaultTags.value.length > 0 ||
-            vaultSearch.value.trim().length > 0
-        );
+        return activeFiltersCount.value > 0;
     });
 
     const resetAllVaultFilters = () => {
         selectedCategories.value = [];
         selectedExts.value = [];
+        selectedOrientation.value = 'all';
         selectedPlatforms.value = [];
         selectedVaultTags.value = [];
         vaultSearch.value = '';
@@ -148,7 +209,7 @@ window.createVaultModule = function ({ ref, computed }) {
 
     const deleteVaultFile = async (file) => {
         if (!file || !file.relative_path) return;
-        const confirmMsg = `Видалити файл "${file.name}" зі сховища назавжди?`;
+        const confirmMsg = window.t ? window.t('confirm_delete_single', { name: file.name }) : `Видалити файл "${file.name}" зі сховища назавжди?`;
         if (!window.confirm(confirmMsg)) return;
 
         try {
@@ -161,11 +222,11 @@ window.createVaultModule = function ({ ref, computed }) {
                     modalFile.value = null;
                 }
             } else {
-                alert('Помилка при видаленні файлу');
+                alert(window.t ? window.t('err_delete_single') : 'Помилка при видаленні файлу');
             }
         } catch (e) {
             console.error('Delete file error:', e);
-            alert('Помилка мережі при видаленні');
+            alert(window.t ? window.t('err_delete_network') : 'Помилка мережі при видаленні');
         }
     };
 
@@ -180,6 +241,24 @@ window.createVaultModule = function ({ ref, computed }) {
             list = list.filter(f => {
                 const ext = (f.extension || f.name.split('.').pop() || '').toLowerCase();
                 return selectedExts.value.includes(ext);
+            });
+        }
+
+        if (selectedOrientation.value !== 'all') {
+            list = list.filter(f => {
+                const w = f.width;
+                const h = f.height;
+                if (!w || !h) {
+                    return true;
+                }
+                if (selectedOrientation.value === 'landscape') {
+                    return w > h;
+                } else if (selectedOrientation.value === 'portrait') {
+                    return h > w;
+                } else if (selectedOrientation.value === 'square') {
+                    return w === h;
+                }
+                return true;
             });
         }
 
@@ -221,12 +300,128 @@ window.createVaultModule = function ({ ref, computed }) {
         });
     });
 
+    const onVaultImageLoad = (event, file) => {
+        const img = event.target;
+        if (img && img.naturalWidth && img.naturalHeight) {
+            file.width = img.naturalWidth;
+            file.height = img.naturalHeight;
+        }
+    };
+
+    const isEditingTags = ref(false);
+    const editingTagInput = ref('');
+    const modalFileTags = ref([]);
+
     const openModal = (file) => {
         modalFile.value = file;
+        isEditingTags.value = false;
+        editingTagInput.value = '';
+        modalFileTags.value = [...(file.tags || [])];
     };
 
     const closeModal = () => {
         modalFile.value = null;
+        isEditingTags.value = false;
+    };
+
+    const modalFileIndex = computed(() => {
+        if (!modalFile.value) return -1;
+        return filteredVaultFiles.value.findIndex(f => f.relative_path === modalFile.value.relative_path);
+    });
+
+    const prevModalFile = () => {
+        const idx = modalFileIndex.value;
+        if (idx > 0) {
+            openModal(filteredVaultFiles.value[idx - 1]);
+        }
+    };
+
+    const nextModalFile = () => {
+        const idx = modalFileIndex.value;
+        if (idx >= 0 && idx < filteredVaultFiles.value.length - 1) {
+            openModal(filteredVaultFiles.value[idx + 1]);
+        }
+    };
+
+    let vaultTouchStartX = 0;
+    let vaultTouchStartY = 0;
+
+    const onVaultTouchStart = (e) => {
+        if (e.touches && e.touches.length === 1) {
+            vaultTouchStartX = e.touches[0].clientX;
+            vaultTouchStartY = e.touches[0].clientY;
+        }
+    };
+
+    const onVaultTouchEnd = (e) => {
+        if (e.changedTouches && e.changedTouches.length === 1) {
+            const deltaX = e.changedTouches[0].clientX - vaultTouchStartX;
+            const deltaY = e.changedTouches[0].clientY - vaultTouchStartY;
+            if (Math.abs(deltaX) > 45 && Math.abs(deltaX) > Math.abs(deltaY) * 1.5) {
+                if (deltaX < 0) {
+                    nextModalFile();
+                } else {
+                    prevModalFile();
+                }
+            }
+        }
+    };
+
+    const startEditingTags = () => {
+        isEditingTags.value = true;
+        modalFileTags.value = [...(modalFile.value ? (modalFile.value.tags || []) : [])];
+        editingTagInput.value = '';
+    };
+
+    const addTagToModalFile = () => {
+        const val = editingTagInput.value.trim();
+        if (!val) return;
+        const parts = val.split(/[,\s]+/).map(t => t.trim().toLowerCase().replace(/^#+/, '')).filter(Boolean);
+        for (const p of parts) {
+            if (p.length >= 2 && !modalFileTags.value.includes(p)) {
+                modalFileTags.value.push(p);
+            }
+        }
+        editingTagInput.value = '';
+    };
+
+    const removeTagFromModalFile = (tag) => {
+        modalFileTags.value = modalFileTags.value.filter(t => t !== tag);
+    };
+
+    const cancelEditingTags = () => {
+        isEditingTags.value = false;
+        modalFileTags.value = [...(modalFile.value ? (modalFile.value.tags || []) : [])];
+        editingTagInput.value = '';
+    };
+
+    const saveModalFileTags = async () => {
+        if (!modalFile.value || !modalFile.value.relative_path) return;
+        try {
+            const res = await fetch('/api/v1/files/tags', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    relative_path: modalFile.value.relative_path,
+                    tags: modalFileTags.value
+                })
+            });
+            if (res.ok) {
+                const data = await res.json();
+                const updated = data.tags || modalFileTags.value;
+                modalFile.value.tags = [...updated];
+                const target = vaultFiles.value.find(f => f.relative_path === modalFile.value.relative_path);
+                if (target) {
+                    target.tags = [...updated];
+                }
+                isEditingTags.value = false;
+            } else {
+                alert(window.t ? window.t('err_save_tags') : 'Помилка збереження тегів');
+            }
+        } catch (e) {
+            console.error('Save tags error:', e);
+            alert(window.t ? window.t('err_save_tags') : 'Помилка мережі при збереженні тегів');
+        }
     };
 
     const isAllFilteredSelected = computed(() => {
@@ -265,11 +460,11 @@ window.createVaultModule = function ({ ref, computed }) {
                 document.body.removeChild(a);
                 URL.revokeObjectURL(blobUrl);
             } else {
-                alert('Не вдалося сформувати ZIP-архів');
+                alert(window.t ? window.t('err_zip_failed') : 'Не вдалося сформувати ZIP-архів');
             }
         } catch (e) {
             console.error('Batch zip download error:', e);
-            alert('Помилка мережі при завантаженні архіву');
+            alert(window.t ? window.t('err_zip_network') : 'Помилка мережі при завантаженні архіву');
         } finally {
             isExportingZip.value = false;
         }
@@ -284,15 +479,60 @@ window.createVaultModule = function ({ ref, computed }) {
         downloadZip(paths, `vault_filtered_${paths.length}_files.zip`);
     };
 
-    // Отримання CSS-класів для контейнера картки залежно від налаштувань
+    const isDeletingBatch = ref(false);
+
+    const deleteSelectedFiles = async () => {
+        if (!selectedFilePaths.value.length) return;
+        const count = selectedFilePaths.value.length;
+        const confirmMsg = window.t ? window.t('confirm_delete_batch', { count }) : `Видалити обрані ${count} файлів зі сховища назавжди?`;
+        if (!window.confirm(confirmMsg)) return;
+
+        isDeletingBatch.value = true;
+        try {
+            const res = await fetch('/api/v1/files/batch-delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ relative_paths: selectedFilePaths.value })
+            });
+            if (res.ok) {
+                const data = await res.json();
+                const deletedSet = new Set(data.deleted || selectedFilePaths.value);
+                vaultFiles.value = vaultFiles.value.filter(f => !deletedSet.has(f.relative_path));
+                selectedFilePaths.value = [];
+                if (modalFile.value && deletedSet.has(modalFile.value.relative_path)) {
+                    modalFile.value = null;
+                }
+            } else {
+                alert(window.t ? window.t('err_delete_batch') : 'Помилка при масовому видаленні файлів');
+            }
+        } catch (e) {
+            console.error('Batch delete error:', e);
+            alert(window.t ? window.t('err_delete_network') : 'Помилка мережі при видаленні');
+        } finally {
+            isDeletingBatch.value = false;
+        }
+    };
+
+    // Отримання CSS-класів та інлайн-стилів для контейнера картки залежно від налаштувань
     const getCardBoxClass = () => {
         const classes = [];
         if (previewAspect.value !== 'auto') {
             classes.push(`aspect-box-${previewAspect.value}`);
         } else {
-            classes.push(`box-size-${containerSize.value}`);
+            classes.push('aspect-box-auto');
         }
         return classes.join(' ');
+    };
+
+    const getCardBoxStyle = () => {
+        if (previewAspect.value === 'auto') {
+            return {
+                height: `${containerHeight.value}px`,
+                maxHeight: `${containerHeight.value}px`,
+                '--card-box-height': `${containerHeight.value}px`
+            };
+        }
+        return {};
     };
 
     return {
@@ -301,13 +541,17 @@ window.createVaultModule = function ({ ref, computed }) {
         vaultCols,
         previewAspect,
         containerSize,
+        containerHeight,
         selectedFilePaths,
         isExportingZip,
         isAllFilteredSelected,
         toggleSelectAllFiltered,
         downloadSelectedZip,
         downloadAllFilteredZip,
+        isDeletingBatch,
+        deleteSelectedFiles,
         getCardBoxClass,
+        getCardBoxStyle,
         selectedCategories,
         selectedExts,
         selectedPlatforms,
@@ -318,6 +562,9 @@ window.createVaultModule = function ({ ref, computed }) {
         availablePlatforms,
         availableVaultTags,
         totalVaultSizeMb,
+        activeFiltersList,
+        activeFiltersCount,
+        removeFilter,
         hasActiveVaultFilters,
         resetAllVaultFilters,
         resetCategoryFilters,
@@ -325,13 +572,29 @@ window.createVaultModule = function ({ ref, computed }) {
         resetTagFilters,
         deleteVaultFile,
         sortBy,
+        selectedOrientation,
+        onVaultImageLoad,
         modalFile,
         filteredVaultFiles,
         fetchVaultFiles,
         getCategoryCount,
         getExtCount,
         openModal,
-        closeModal
+        closeModal,
+        modalFileIndex,
+        prevModalFile,
+        nextModalFile,
+        onVaultTouchStart,
+        onVaultTouchEnd,
+        isMobileVaultFiltersOpen,
+        isEditingTags,
+        editingTagInput,
+        modalFileTags,
+        startEditingTags,
+        addTagToModalFile,
+        removeTagFromModalFile,
+        cancelEditingTags,
+        saveModalFileTags
     };
 
 };

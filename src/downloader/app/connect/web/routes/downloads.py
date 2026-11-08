@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 from downloader.app.connect.web.state import broadcast_progress, downloader, tasks_state
 from downloader.app.core.dto.task import DownloadRequest, TaskProgress
+from downloader.app.core.platforms import detect_source_platform
 
 router = APIRouter(tags=["Downloads"])
 
@@ -16,12 +17,21 @@ class BatchDownloadRequest(BaseModel):
 @router.post("/api/v1/download", response_model=TaskProgress)
 async def start_download(req: DownloadRequest) -> TaskProgress:
     task_id = str(uuid.uuid4())[:8]
+    # Завжди маркуємо тип підключення веб-інтерфейсу
+    effective_tags = list(dict.fromkeys(["web", *(req.tags or [])]))
+    detected_platform = detect_source_platform(
+        url=str(req.url),
+        name=req.title,
+        tags=effective_tags,
+        existing_platform=req.source_platform,
+    )
     initial_progress = TaskProgress(
         task_id=task_id,
         url=str(req.url),
         title=req.title,
+        source_platform=detected_platform,
         media_type="audio" if req.audio_only else "video",
-        tags=req.tags,
+        tags=effective_tags,
     )
     tasks_state[task_id] = initial_progress
 
@@ -30,10 +40,12 @@ async def start_download(req: DownloadRequest) -> TaskProgress:
             task_id=task_id,
             url=str(req.url),
             title=req.title,
+            source_platform=detected_platform,
             max_height=req.max_height,
             audio_only=req.audio_only,
+            download_playlist=req.download_playlist,
             on_progress=broadcast_progress,
-            tags=req.tags,
+            tags=effective_tags,
             image_format=req.image_format,
             image_max_side=req.image_max_side,
         )

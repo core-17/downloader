@@ -55,10 +55,13 @@ async def process_single_url(
     task_id = str(uuid.uuid4())[:8]
     timeout_sec = _settings.CONFIRMATION_TIMEOUT_SECONDS
 
+    # Завжди маркуємо тип підключення у тегах
+    effective_tags = list(dict.fromkeys(["telegram", "tg", *(tags or [])]))
+
     pending = PendingLinkTask(
         task_id=task_id,
         url=url,
-        tags=tags,
+        tags=effective_tags,
         max_height=prefs.max_height,
         image_format=prefs.image_format,
         image_max_side=prefs.image_max_side,

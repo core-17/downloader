@@ -8,11 +8,20 @@ from pydantic import BaseModel
 
 from downloader.app.config.constants import IMAGE_EXTENSIONS
 from downloader.app.connect.web.state import broadcast_progress, downloader
+from downloader.app.core.accounts import account_manager
 from downloader.app.core.dto.task import TaskProgress
 from downloader.app.service.compression.transcoder import process_image
 from downloader.app.service.storage.base import VaultFileItem
 
 router = APIRouter(tags=["Vault"])
+
+
+def _get_active_storage():
+    """Повертає сховище поточного активного акаунту (або загальне системне)."""
+    return account_manager.get_storage_for_account(
+        account_id=account_manager.active_web_account_id,
+        default_storage=downloader.storage,
+    )
 
 
 class DirectUploadPayload(BaseModel):
@@ -26,8 +35,9 @@ class DirectUploadPayload(BaseModel):
 @router.post("/api/v1/upload", response_model=TaskProgress)
 async def upload_file_to_vault(payload: DirectUploadPayload) -> TaskProgress:
     """Завантаження локального файлу напряму у сховище через веб-інтерфейс."""
-    tag_list = [t.strip().lstrip("#") for t in payload.tags.split(",") if t.strip()]
-    prog = await downloader.storage.save_uploaded_base64_file(
+    storage = _get_active_storage()
+    tag_list = list(dict.fromkeys(["web", "web_upload", *[t.strip().lstrip("#") for t in payload.tags.split(",") if t.strip()]]))
+    prog = await storage.save_uploaded_base64_file(
         filename=payload.filename,
         content_b64=payload.content_b64,
         tags=tag_list,
@@ -42,7 +52,7 @@ async def upload_file_to_vault(payload: DirectUploadPayload) -> TaskProgress:
             prog.file_path = str(processed)
             prog.file_paths = [str(processed)]
             prog.title = processed.name
-            await downloader.storage.save_task_metadata(prog.task_id, prog)
+            await storage.save_task_metadata(prog.task_id, prog)
 
     await broadcast_progress(prog)
     return prog
@@ -51,31 +61,85 @@ async def upload_file_to_vault(payload: DirectUploadPayload) -> TaskProgress:
 @router.get("/api/v1/files", response_model=list[VaultFileItem])
 async def list_vault_files() -> list[VaultFileItem]:
     """Повертає список усіх збережених файлів у сховищі разом із метаданими та тегами."""
-    return await downloader.storage.list_files()
+    storage = _get_active_storage()
+    return await storage.list_files()
 
 
 @router.get("/api/v1/files/view/{file_path:path}")
 async def view_vault_file(file_path: str) -> FileResponse:
     """Перегляд файлу прямо в браузері (inline)."""
+    storage = _get_active_storage()
     try:
-        target = downloader.storage.resolve_path(file_path)
+        if hasattr(storage, "get_or_download_file"):
+            target = await storage.get_or_download_file(file_path)
+        else:
+            target = storage.resolve_path(file_path)
     except FileNotFoundError:
-        raise HTTPException(status_code=404, detail="Файл не знайдено у сховищі")
+        # Спроба пошуку в глобальному сховищі, якщо файл створено в іншій сесії
+        try:
+            if hasattr(downloader.storage, "get_or_download_file"):
+                target = await downloader.storage.get_or_download_file(file_path)
+            else:
+                target = downloader.storage.resolve_path(file_path)
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="Файл не знайдено у сховищі")
     return FileResponse(target, media_type=None, content_disposition_type="inline")
 
 
 @router.get("/api/v1/files/download/{file_path:path}")
 async def download_vault_file(file_path: str) -> FileResponse:
     """Скачування файлу зі сховища на пристрій користувача (attachment)."""
+    storage = _get_active_storage()
     try:
-        target = downloader.storage.resolve_path(file_path)
+        if hasattr(storage, "get_or_download_file"):
+            target = await storage.get_or_download_file(file_path)
+        else:
+            target = storage.resolve_path(file_path)
     except FileNotFoundError:
-        raise HTTPException(status_code=404, detail="Файл не знайдено у сховищі")
+        try:
+            if hasattr(downloader.storage, "get_or_download_file"):
+                target = await downloader.storage.get_or_download_file(file_path)
+            else:
+                target = downloader.storage.resolve_path(file_path)
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="Файл не знайдено у сховищі")
     return FileResponse(target, filename=target.name, content_disposition_type="attachment")
 
 
 class BatchDownloadPayload(BaseModel):
     relative_paths: list[str]
+
+
+class BatchDeletePayload(BaseModel):
+    relative_paths: list[str]
+
+
+@router.post("/api/v1/files/batch-delete")
+async def batch_delete_vault_files(payload: BatchDeletePayload) -> dict[str, Any]:
+    """Пакетне видалення вибраних файлів зі сховища."""
+    if not payload.relative_paths:
+        raise HTTPException(status_code=400, detail="Список файлів для видалення порожній")
+
+    deleted: list[str] = []
+    failed: list[str] = []
+
+    for rel in payload.relative_paths:
+        try:
+            ok = await downloader.storage.delete_file(rel)
+            if ok:
+                deleted.append(rel)
+            else:
+                failed.append(rel)
+        except Exception:
+            failed.append(rel)
+
+    return {
+        "status": "ok",
+        "deleted_count": len(deleted),
+        "failed_count": len(failed),
+        "deleted": deleted,
+        "failed": failed,
+    }
 
 
 @router.post("/api/v1/files/batch-zip")
@@ -126,5 +190,21 @@ async def delete_vault_file(file_path: str) -> dict[str, Any]:
     if not success:
         raise HTTPException(status_code=404, detail="Файл не знайдено або не вдалося видалити")
     return {"status": "ok", "deleted": file_path}
+
+
+class UpdateFileTagsPayload(BaseModel):
+    relative_path: str
+    tags: list[str]
+
+
+@router.post("/api/v1/files/tags")
+async def update_file_tags(payload: UpdateFileTagsPayload) -> dict[str, Any]:
+    """Оновлення, додавання або видалення тегів файлу в сховищі."""
+    updated = await downloader.storage.update_file_tags(payload.relative_path, payload.tags)
+    return {
+        "status": "ok",
+        "relative_path": payload.relative_path,
+        "tags": updated,
+    }
 
 

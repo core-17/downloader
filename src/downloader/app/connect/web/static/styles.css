@@ -53,6 +53,47 @@ body {
     box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
 }
 
+/* Додаткова плаваюча панель інструментів (пошук, сортування, мобільні кнопки виклику фільтрів),
+   яка з'являється при підтягуванні вгору без необхідності гортати до самого верху сторінки */
+.sticky-subbar {
+    position: sticky;
+    top: calc(var(--navbar-height, 6rem) + 0.5rem);
+    z-index: 35;
+    transition: transform 0.28s ease, opacity 0.28s ease, box-shadow 0.28s ease, top 0.15s ease;
+}
+
+@media (min-width: 1024px) {
+    .sticky-subbar {
+        top: calc(var(--navbar-height, 6.25rem) + 0.75rem);
+    }
+}
+
+.sticky-subbar.sticky-subbar-hidden {
+    transform: translateY(-130%);
+    opacity: 0;
+    pointer-events: none;
+}
+
+.sticky-subbar.sticky-subbar-visible {
+    transform: translateY(0);
+    opacity: 1;
+    pointer-events: auto;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.45), 0 8px 10px -6px rgba(0, 0, 0, 0.45);
+}
+
+body.nav-hidden .sticky-subbar {
+    top: 0.5rem !important;
+}
+
+/* Приховування смуги прокрутки для горизонтальних мобільних меню */
+.no-scrollbar::-webkit-scrollbar {
+    display: none;
+}
+.no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
 /* Автоматичне прокручування бічної панелі фільтрів, коли вона зафіксована зверху */
 .filter-sidebar {
     max-height: calc(100vh - 2rem);
@@ -77,9 +118,44 @@ body {
     }
 }
 
+/* Мобільна версія панелі фільтрів: висувне бічне меню (off-canvas drawer) з плавною анімацією */
+@media (max-width: 1023px) {
+    .filter-sidebar {
+        position: fixed !important;
+        top: 0 !important;
+        bottom: 0 !important;
+        left: 0 !important;
+        width: 88vw !important;
+        max-width: 23rem !important;
+        height: 100vh !important;
+        max-height: 100vh !important;
+        z-index: 60 !important;
+        border-radius: 0 1.25rem 1.25rem 0 !important;
+        border-left: none !important;
+        box-shadow: 12px 0 40px -5px rgba(0, 0, 0, 0.8) !important;
+        transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    }
+
+    .filter-sidebar.drawer-closed {
+        transform: translateX(-100%) !important;
+        pointer-events: none;
+        visibility: hidden;
+    }
+
+    .filter-sidebar.drawer-open {
+        transform: translateX(0) !important;
+        pointer-events: auto;
+        visibility: visible;
+    }
+}
+
 /* Адаптивні динамічні класи для колонок сітки:
    На мобільних пристроях автоматично адаптується, а на великих екранах:
    чим менше вибрано колонок у рядку, тим БІЛЬШІ картки (розтягуються на всю ширину) */
+.media-grid-1 {
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+}
+
 .media-grid-2 {
     grid-template-columns: repeat(1, minmax(0, 1fr));
 }
@@ -142,6 +218,38 @@ body {
     .media-grid-6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 }
 
+.media-grid-7 {
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+}
+@media (min-width: 480px) {
+    .media-grid-7 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (min-width: 640px) {
+    .media-grid-7 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (min-width: 1024px) {
+    .media-grid-7 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}
+@media (min-width: 1280px) {
+    .media-grid-7 { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+}
+
+.media-grid-8 {
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+}
+@media (min-width: 480px) {
+    .media-grid-8 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (min-width: 640px) {
+    .media-grid-8 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (min-width: 1024px) {
+    .media-grid-8 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}
+@media (min-width: 1280px) {
+    .media-grid-8 { grid-template-columns: repeat(8, minmax(0, 1fr)); }
+}
+
 /* Контейнер картки: адаптується по більшій стороні без обрізання, пропорції та висота */
 .media-card-box {
     position: relative;
@@ -155,22 +263,22 @@ body {
 }
 
 /* Режими співвідношення сторін контейнера прев'ю */
-.aspect-box-auto { aspect-ratio: auto; min-height: 12rem; max-height: 32rem; }
+.aspect-box-auto {
+    aspect-ratio: auto;
+    height: var(--card-box-height, 17.5rem);
+    min-height: 80px;
+}
 .aspect-box-16-9 { aspect-ratio: 16 / 9; }
 .aspect-box-4-3  { aspect-ratio: 4 / 3; }
 .aspect-box-1-1  { aspect-ratio: 1 / 1; }
 .aspect-box-3-4  { aspect-ratio: 3 / 4; }
 .aspect-box-9-16 { aspect-ratio: 9 / 16; }
 
-/* Динамічний розмір контейнера за бажанням користувача (compact, normal, large, huge) */
+/* Динамічний розмір контейнера за бажанням користувача (за замовчуванням fallback) */
 .box-size-compact { height: 11rem; }
 .box-size-normal  { height: 16rem; }
 .box-size-large   { height: 22rem; }
 .box-size-huge    { height: 30rem; }
-
-/* Якщо вибрано 2 колонки на великому екрані і режим normal - збільшуємо висоту щоб фото розкрилося на максимум */
-.media-grid-2 .box-size-normal { height: 26rem; }
-.media-grid-3 .box-size-normal { height: 20rem; }
 
 .media-card-box img,
 .media-card-box video {

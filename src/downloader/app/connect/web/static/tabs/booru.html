@@ -1,42 +1,114 @@
-<!-- ==================== ВКЛАДКА 2: КЛОН YANDE.RE / BOORU ВІТРИНА (З ЛІВОЮ ПАНЕЛЛЮ ФІЛЬТРІВ) ==================== -->
-<div v-if="currentTab === 'booru'" class="mt-6 flex flex-col lg:flex-row gap-6 items-start">
+<!-- ==================== ВКЛАДКА 2: YANDE.RE / BOORU ВІТРИНА (З ЛІВОЮ ПАНЕЛЛЮ ФІЛЬТРІВ) ==================== -->
+<div v-if="currentTab === 'booru'" class="mt-4 sm:mt-6 flex flex-col lg:flex-row gap-5 lg:gap-6 items-start">
 
-    <!-- ЛІВА БІЧНА ПАНЕЛЬ ФІЛЬТРІВ ТА ПАРАМЕТРІВ ДЛЯ BOORU (Sticky + Власний скрол) -->
-    <aside :class="{ 'top-4': !isNavVisible, 'top-24': isNavVisible }"
-           class="filter-sidebar w-full lg:w-72 shrink-0 bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-5">
+    <!-- Затемнення фону (Backdrop) для мобільного висувного меню фільтрів Booru -->
+    <div v-if="isMobileBooruFiltersOpen"
+         @click="isMobileBooruFiltersOpen = false"
+         class="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 lg:hidden transition-opacity"></div>
+
+    <!-- ЛІВА БІЧНА ПАНЕЛЬ ФІЛЬТРІВ ТА ПАРАМЕТРІВ ДЛЯ BOORU (На мобільному: висувне меню; На десктопі: Sticky) -->
+    <aside :class="[
+               isMobileBooruFiltersOpen ? 'drawer-open' : 'drawer-closed lg:drawer-open',
+               { 'top-4': !isNavVisible, 'top-24': isNavVisible }
+           ]"
+           class="filter-sidebar w-full lg:w-72 shrink-0 bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-4">
         <div class="flex items-center justify-between border-b border-slate-800 pb-3">
             <h3 class="text-sm font-bold text-white flex items-center gap-2">
-                🌸 Фільтри Yande.re
+                🌸 {{ t('booru_filters_title') }}
             </h3>
-            <button @click="setBooruTag('order:score')"
-                    class="text-xs text-pink-400 hover:text-pink-300 font-medium">
-                Скинути
+            <div class="flex items-center gap-2">
+                <button @click="setBooruTag('')"
+                        class="text-xs text-pink-400 hover:text-pink-300 font-medium px-1.5 py-0.5">
+                    {{ t('btn_reset') }}
+                </button>
+                <!-- Мобільна кнопка закриття меню -->
+                <button type="button"
+                        @click="isMobileBooruFiltersOpen = false"
+                        :title="t('btn_close')"
+                        class="lg:hidden p-1.5 text-slate-400 hover:text-white rounded-lg bg-slate-800 hover:bg-slate-700 text-xs">
+                    ✕
+                </button>
+            </div>
+        </div>
+
+        <!-- 0. Вибір провайдерів Booru (мультивибір) -->
+        <div class="bg-slate-950/70 border border-slate-800/80 rounded-xl p-3 space-y-2">
+            <div class="flex items-center justify-between text-xs font-semibold text-slate-400">
+                <span>{{ t('select_providers_label') }}</span>
+                <button type="button" @click="selectAllProviders" class="text-[11px] text-pink-400 hover:text-pink-300 font-normal">
+                    {{ t('select_all_providers') }}
+                </button>
+            </div>
+            <div class="grid grid-cols-2 gap-1.5">
+                <button v-for="prov in booruProviders" :key="prov.id"
+                        type="button"
+                        @click="toggleBooruProvider(prov.id)"
+                        :class="isProviderSelected(prov.id)
+                            ? 'bg-pink-600 text-white font-bold shadow border-pink-500'
+                            : 'bg-slate-900 text-slate-400 hover:text-white border-slate-800'"
+                        class="px-2 py-1.5 rounded-lg text-xs border transition flex items-center justify-between gap-1">
+                    <span class="flex items-center gap-1 truncate">
+                        <span>{{ prov.icon }}</span>
+                        <span class="truncate">{{ prov.name }}</span>
+                    </span>
+                    <span class="text-[10px]">{{ isProviderSelected(prov.id) ? '✓' : '' }}</span>
+                </button>
+            </div>
+            <div class="text-[10px] text-slate-500 leading-tight">
+                💡 {{ t('booru_servers_selected', { count: selectedBooruProviders.length }) }}
+            </div>
+        </div>
+
+        <!-- 0.1 Безпечний режим (Safe Mode) -->
+        <div class="bg-slate-950/70 border border-slate-800/80 rounded-xl p-3 space-y-2">
+            <div class="flex items-center justify-between">
+                <span class="text-xs text-slate-400 font-semibold flex items-center gap-1">
+                    <span>🛡️ {{ t('booru_safe_mode_label') }}</span>
+                </span>
+                <button type="button"
+                        @click="showSafeSettings = !showSafeSettings"
+                        :class="showSafeSettings ? 'text-pink-400' : 'text-slate-500 hover:text-slate-300'"
+                        :title="t('safe_mode_settings_btn')"
+                        class="text-xs transition">
+                    ⚙️
+                </button>
+            </div>
+            <button type="button"
+                    @click="toggleSafeMode"
+                    :class="booruSafeMode
+                        ? 'bg-emerald-600 text-white shadow border-emerald-500 font-semibold'
+                        : 'bg-slate-900 text-slate-400 hover:text-white border-slate-800'"
+                    class="w-full py-1.5 rounded-lg text-xs border transition flex items-center justify-center gap-1.5">
+                <span>{{ booruSafeMode ? '🛡️ ' + t('safe_mode_on') : '⚠️ ' + t('safe_mode_off') }}</span>
             </button>
         </div>
 
         <!-- 1. Повзунок кількості колонок у рядку -->
         <div class="bg-slate-950/70 border border-slate-800/80 rounded-xl p-3 space-y-2">
             <div class="flex items-center justify-between text-xs">
-                <span class="text-slate-400 font-medium">Колонок у рядку:</span>
+                <span class="text-slate-400 font-medium">{{ t('columns_in_row') }}</span>
                 <span class="px-2 py-0.5 rounded-md bg-pink-950/60 text-pink-300 font-bold border border-pink-500/30">
-                    {{ booruCols }} в ряд
+                    {{ booruCols }} {{ t('in_row') }}
                 </span>
             </div>
-            <input type="range" min="2" max="6" step="1" v-model.number="booruCols"
+            <input type="range" min="1" max="8" step="1" v-model.number="booruCols"
                    class="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-pink-500">
             <div class="flex justify-between text-[10px] text-slate-500 px-0.5 font-mono">
+                <span>1</span>
                 <span>2</span>
                 <span>3</span>
                 <span>4</span>
                 <span>5</span>
                 <span>6</span>
+                <span>7</span>
+                <span>8</span>
             </div>
         </div>
 
         <!-- 2. Пропорції, орієнтація та режим прев'ю (16:9, 4:3, 1:1, 3:4, 9:16 або Auto) -->
         <div class="bg-slate-950/70 border border-slate-800/80 rounded-xl p-3 space-y-2.5">
             <div class="flex items-center justify-between text-xs font-semibold text-slate-300">
-                <span>📐 Пропорції та орієнтація:</span>
+                <span>📐 {{ t('aspect_ratio_title') }}</span>
             </div>
             <div class="grid grid-cols-3 gap-1 text-[11px]">
                 <button type="button" @click="booruPreviewAspect = 'auto'"
@@ -71,60 +143,105 @@
                 </button>
             </div>
 
-            <!-- Вибір висоти контейнера, коли обрано Auto -->
-            <div v-if="booruPreviewAspect === 'auto'" class="pt-1.5 border-t border-slate-800/60 space-y-1">
-                <span class="text-[11px] text-slate-400 block">Розмір контейнера:</span>
-                <div class="grid grid-cols-4 gap-1 text-[10px]">
-                    <button type="button" @click="booruContainerSize = 'compact'"
-                            :class="booruContainerSize === 'compact' ? 'bg-pink-700 text-white font-semibold' : 'bg-slate-900 text-slate-400 hover:text-white'"
-                            class="py-1 rounded border border-slate-800 text-center">Міні</button>
-                    <button type="button" @click="booruContainerSize = 'normal'"
-                            :class="booruContainerSize === 'normal' ? 'bg-pink-700 text-white font-semibold' : 'bg-slate-900 text-slate-400 hover:text-white'"
-                            class="py-1 rounded border border-slate-800 text-center">Норм</button>
-                    <button type="button" @click="booruContainerSize = 'large'"
-                            :class="booruContainerSize === 'large' ? 'bg-pink-700 text-white font-semibold' : 'bg-slate-900 text-slate-400 hover:text-white'"
-                            class="py-1 rounded border border-slate-800 text-center">Максі</button>
-                    <button type="button" @click="booruContainerSize = 'huge'"
-                            :class="booruContainerSize === 'huge' ? 'bg-pink-700 text-white font-semibold' : 'bg-slate-900 text-slate-400 hover:text-white'"
-                            class="py-1 rounded border border-slate-800 text-center">Гігант</button>
+            <!-- Повзунок висоти контейнера, коли обрано Auto (від 100px до 800px) -->
+            <div v-if="booruPreviewAspect === 'auto'" class="pt-2 border-t border-slate-800/60 space-y-1.5">
+                <div class="flex items-center justify-between text-xs">
+                    <span class="text-[11px] text-slate-400 font-medium">{{ t('container_size_title') }}</span>
+                    <span class="px-2 py-0.5 rounded-md bg-pink-950/60 text-pink-300 font-mono text-[11px] font-bold border border-pink-500/30">
+                        {{ booruContainerHeight }}px
+                    </span>
                 </div>
+                <input type="range" min="100" max="800" step="10" v-model.number="booruContainerHeight"
+                       class="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-pink-500">
+                <div class="flex justify-between text-[10px] text-slate-500 px-0.5 font-mono">
+                    <span>100px</span>
+                    <span>280px</span>
+                    <span>500px</span>
+                    <span>800px</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Фільтр за орієнтацією зображення (Всі / Альбомна / Портретна / Квадратна) -->
+        <div class="bg-slate-950/70 border border-slate-800/80 rounded-xl p-3 space-y-2">
+            <div class="flex items-center justify-between text-xs font-semibold text-slate-300">
+                <span>{{ t('orientation_title') }}</span>
+                <button v-if="booruOrientation !== 'all'"
+                        type="button"
+                        @click="booruOrientation = 'all'"
+                        class="text-[11px] font-normal lowercase text-rose-400 hover:text-rose-300">
+                    {{ t('btn_clear') }}
+                </button>
+            </div>
+            <div class="grid grid-cols-2 gap-1.5 text-xs">
+                <button type="button"
+                        @click="booruOrientation = 'all'"
+                        :class="booruOrientation === 'all' ? 'bg-pink-600 text-white font-bold shadow' : 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800'"
+                        class="px-2 py-1.5 rounded-lg transition flex items-center justify-center gap-1.5">
+                    <span>🔄</span>
+                    <span>{{ t('orientation_all') }}</span>
+                </button>
+                <button type="button"
+                        @click="booruOrientation = 'landscape'"
+                        :class="booruOrientation === 'landscape' ? 'bg-pink-600 text-white font-bold shadow' : 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800'"
+                        class="px-2 py-1.5 rounded-lg transition flex items-center justify-center gap-1.5"
+                        :title="t('orientation_landscape_tip')">
+                    <span>🖼️</span>
+                    <span>{{ t('orientation_landscape') }}</span>
+                </button>
+                <button type="button"
+                        @click="booruOrientation = 'portrait'"
+                        :class="booruOrientation === 'portrait' ? 'bg-pink-600 text-white font-bold shadow' : 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800'"
+                        class="px-2 py-1.5 rounded-lg transition flex items-center justify-center gap-1.5"
+                        :title="t('orientation_portrait_tip')">
+                    <span>📱</span>
+                    <span>{{ t('orientation_portrait') }}</span>
+                </button>
+                <button type="button"
+                        @click="booruOrientation = 'square'"
+                        :class="booruOrientation === 'square' ? 'bg-pink-600 text-white font-bold shadow' : 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800'"
+                        class="px-2 py-1.5 rounded-lg transition flex items-center justify-center gap-1.5"
+                        :title="t('orientation_square_tip')">
+                    <span>⏹️</span>
+                    <span>{{ t('orientation_square') }}</span>
+                </button>
             </div>
         </div>
 
         <!-- 3. Тумблер відображення у стрічці -->
         <div class="bg-slate-950/70 border border-slate-800/80 rounded-xl p-3 space-y-2">
-            <span class="text-xs text-slate-400 font-medium block">Режим показу у стрічці:</span>
+            <span class="text-xs text-slate-400 font-medium block">{{ t('feed_view_quality_label') }}</span>
             <div class="grid grid-cols-2 gap-1.5 p-1 bg-slate-900 rounded-lg border border-slate-800 text-xs">
                 <button type="button"
                         @click="booruViewMode = 'preview'"
                         :class="booruViewMode === 'preview' ? 'bg-pink-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'"
                         class="py-1.5 rounded-md font-semibold transition text-center">
-                    ⚡ Прев'ю
+                    ⚡ {{ t('feed_quality_preview') }}
                 </button>
                 <button type="button"
                         @click="booruViewMode = 'original'"
                         :class="booruViewMode === 'original' ? 'bg-pink-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'"
                         class="py-1.5 rounded-md font-semibold transition text-center">
-                    🖼️ Оригінал
+                    🖼️ {{ t('feed_quality_original') }}
                 </button>
             </div>
             <span class="text-[10px] text-slate-500 block leading-tight">
-                Прев'ю оптимізовано для швидкодії без перевантаження браузера.
+                {{ t('feed_quality_hint') }}
             </span>
         </div>
 
-        <!-- 3. Налаштування завантаження (Формат і розмір) -->
+        <!-- 4. Налаштування завантаження (Формат і розмір) -->
         <div class="space-y-2.5">
             <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                Параметри скачування
+                {{ t('download_settings_title') }}
             </div>
 
             <div class="bg-slate-950/70 border border-slate-800/80 rounded-xl p-3 space-y-2 text-xs">
                 <div>
-                    <label class="block text-[11px] text-slate-400 mb-1">Формат файлу:</label>
+                    <label class="block text-[11px] text-slate-400 mb-1">{{ t('file_format_label') }}</label>
                     <select v-model="booruDownloadOpts.format"
                             class="w-full px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-slate-200 focus:outline-none">
-                        <option value="original">Оригінал (Максимальна якість)</option>
+                        <option value="original">{{ t('format_original') }}</option>
                         <option value="webp">WebP</option>
                         <option value="jpg">JPG</option>
                         <option value="png">PNG</option>
@@ -132,10 +249,10 @@
                 </div>
 
                 <div>
-                    <label class="block text-[11px] text-slate-400 mb-1">Макс. сторона:</label>
+                    <label class="block text-[11px] text-slate-400 mb-1">{{ t('max_side_booru_label') }}</label>
                     <select v-model="booruDownloadOpts.max_side"
                             class="w-full px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-slate-200 focus:outline-none">
-                        <option :value="null">Оригінальний розмір</option>
+                        <option :value="null">{{ t('no_max_side') }}</option>
                         <option :value="1920">До 1920 px</option>
                         <option :value="2560">До 2560 px (2K)</option>
                         <option :value="3840">До 3840 px (4K)</option>
@@ -144,10 +261,10 @@
             </div>
         </div>
 
-        <!-- 4. Пакетне скачування за поточним запитом або ВСЬОГО тегу -->
+        <!-- 5. Пакетне скачування за поточним запитом або ВСЬОГО тегу -->
         <div class="bg-slate-950/70 border border-pink-500/30 rounded-xl p-3 space-y-2.5">
             <div class="text-xs font-semibold text-pink-400 flex items-center justify-between">
-                <span>📦 Експорт Booru</span>
+                <span>📦 {{ t('booru_export_title') }}</span>
                 <span class="text-[10px] text-slate-400">Yande.re</span>
             </div>
 
@@ -155,13 +272,13 @@
             <div class="flex items-center gap-1.5">
                 <select v-model="booruDownloadOpts.batchPreset"
                         class="flex-1 bg-slate-900 border border-slate-700 rounded-lg text-xs text-slate-200 px-2 py-1.5 focus:outline-none">
-                    <option value="5">5 шт.</option>
-                    <option value="10">10 шт.</option>
-                    <option value="20">20 шт.</option>
-                    <option value="50">50 шт.</option>
-                    <option value="100">100 шт.</option>
-                    <option value="all">⚡ Весь тег (All)</option>
-                    <option value="custom">Власна...</option>
+                    <option value="5">5 {{ t('pcs') }}</option>
+                    <option value="10">10 {{ t('pcs') }}</option>
+                    <option value="20">20 {{ t('pcs') }}</option>
+                    <option value="50">50 {{ t('pcs') }}</option>
+                    <option value="100">100 {{ t('pcs') }}</option>
+                    <option value="all">⚡ {{ t('all_tag') }}</option>
+                    <option value="custom">{{ t('custom_amount') }}</option>
                 </select>
                 <input v-if="booruDownloadOpts.batchPreset === 'custom'"
                        v-model.number="booruDownloadOpts.customBatchLimit"
@@ -170,41 +287,150 @@
             </div>
 
             <div v-if="booruDownloadOpts.batchPreset === 'all'" class="text-[10px] text-amber-300/90 leading-tight">
-                ⚠️ Буде посторінково завантажено всі доступні ілюстрації за тегом «{{ booruQuery }}».
+                ⚠️ {{ t('all_tag_warning') }}
             </div>
 
             <button type="button"
                     @click="downloadBooruBatchByTag"
                     :disabled="booruDownloadOpts.isBatchRunning"
                     class="w-full py-2 rounded-lg bg-pink-600 hover:bg-pink-500 disabled:opacity-50 text-xs font-semibold text-white transition shadow-md shadow-pink-600/20 flex items-center justify-center gap-1.5">
-                <span>{{ booruDownloadOpts.isBatchRunning ? '⏳ Завантаження...' : (booruDownloadOpts.batchPreset === 'all' ? '⬇ Скачати ВСІ пости за тегом' : '⬇ Скачати пакет') }}</span>
+                <span>{{ booruDownloadOpts.isBatchRunning ? ('⏳ ' + t('status_downloading')) : (booruDownloadOpts.batchPreset === 'all' ? ('⬇ ' + t('btn_download_all_tag')) : ('⬇ ' + t('btn_download_batch'))) }}</span>
             </button>
         </div>
 
-        <!-- 5. Параметри сторінки та скролу -->
+        <!-- 6. Параметри сторінки та скролу -->
         <div class="bg-slate-950/70 border border-slate-800/80 rounded-xl p-3 space-y-2 text-xs">
             <div class="flex items-center justify-between">
-                <span class="text-slate-400">На порцію:</span>
+                <span class="text-slate-400">{{ t('per_page_label') }}</span>
                 <select v-model="booruPerPage" @change="searchBooru(true)"
                         class="bg-slate-900 border border-slate-700 px-2 py-1 rounded text-slate-200 font-semibold focus:outline-none cursor-pointer">
-                    <option :value="12">12 фото</option>
-                    <option :value="24">24 фото</option>
-                    <option :value="40">40 фото</option>
-                    <option :value="60">60 фото</option>
-                    <option :value="100">100 фото</option>
+                    <option :value="12">12 {{ t('photos_word') }}</option>
+                    <option :value="24">24 {{ t('photos_word') }}</option>
+                    <option :value="40">40 {{ t('photos_word') }}</option>
+                    <option :value="60">60 {{ t('photos_word') }}</option>
+                    <option :value="100">100 {{ t('photos_word') }}</option>
                 </select>
             </div>
             <label class="flex items-center gap-2 text-slate-300 cursor-pointer pt-1 border-t border-slate-800 select-none">
                 <input type="checkbox" v-model="infiniteScrollEnabled" class="rounded text-pink-500 focus:ring-0">
-                <span>♾️ Нескінченний скрол</span>
+                <span>♾️ {{ t('infinite_scroll_label') }}</span>
             </label>
+        </div>
+
+        <!-- Мобільна кнопка застосувати / закрити фільтри Booru -->
+        <div class="lg:hidden sticky bottom-0 pt-3 pb-1 bg-slate-900 border-t border-slate-800 mt-4">
+            <button type="button"
+                    @click="isMobileBooruFiltersOpen = false"
+                    class="w-full py-2.5 bg-pink-600 hover:bg-pink-500 text-white text-xs font-bold rounded-xl shadow-lg transition">
+                ✓ {{ t('apply_booru_results', { count: booruPosts.length }) }}
+            </button>
         </div>
     </aside>
 
     <!-- ПРАВА ОСНОВНА ОБЛАСТЬ BOORU -->
     <div class="flex-1 w-full space-y-4">
-        <!-- Верхня панель пошуку тегів та швидких фільтрів -->
-        <div class="bg-slate-900/90 border border-pink-500/30 rounded-2xl p-4 shadow-xl space-y-3">
+        <!-- Плаваюча закріплена панель інструментів Booru -->
+        <div :class="isNavVisible ? 'sticky-subbar-visible' : 'sticky-subbar-hidden'"
+             class="sticky-subbar bg-slate-900/95 backdrop-blur-md border border-pink-500/30 rounded-2xl p-3 sm:p-4 shadow-xl space-y-3">
+
+            <!-- Панель вибору провайдерів Booru (мультивибір) та тумблер Safe Mode -->
+            <div class="flex items-center justify-between gap-2 overflow-x-auto no-scrollbar pb-1">
+                <div class="flex items-center gap-1.5 shrink-0">
+                    <span class="text-xs text-slate-400 font-medium hidden md:inline mr-1">{{ t('select_providers_label') }}:</span>
+                    <button v-for="prov in booruProviders" :key="prov.id"
+                            type="button"
+                            @click="toggleBooruProvider(prov.id)"
+                            :class="isProviderSelected(prov.id)
+                                ? 'bg-pink-600 text-white font-bold shadow-md shadow-pink-600/30 border-pink-500'
+                                : 'bg-slate-950 text-slate-400 hover:text-white border-slate-800 hover:border-slate-700'"
+                            class="px-3 py-1.5 rounded-xl text-xs font-medium border transition flex items-center gap-1.5 whitespace-nowrap">
+                        <span>{{ prov.icon }}</span>
+                        <span>{{ prov.name }}</span>
+                        <span class="text-[10px] ml-0.5">{{ isProviderSelected(prov.id) ? '✓' : '' }}</span>
+                    </button>
+                    <button type="button"
+                            @click="selectAllProviders"
+                            class="px-2.5 py-1.5 rounded-xl text-[11px] font-medium text-pink-400 hover:text-pink-300 bg-slate-950 border border-slate-800 hover:border-pink-500/40 transition whitespace-nowrap">
+                        {{ t('select_all_providers') }}
+                    </button>
+                </div>
+
+                <div class="flex items-center gap-1.5 shrink-0 ml-auto">
+                    <button type="button"
+                            @click="toggleSafeMode"
+                            :class="booruSafeMode
+                                ? 'bg-emerald-600 text-white shadow border-emerald-500 font-bold'
+                                : 'bg-slate-950 text-slate-400 hover:text-white border-slate-800'"
+                            class="px-3 py-1.5 rounded-xl text-xs font-semibold border transition flex items-center gap-1.5">
+                        <span>🛡️</span>
+                        <span>{{ booruSafeMode ? t('safe_mode_on') : t('safe_mode_off') }}</span>
+                    </button>
+                    <button type="button"
+                            @click="showSafeSettings = !showSafeSettings"
+                            :class="showSafeSettings ? 'bg-pink-600 text-white' : 'bg-slate-950 text-slate-400 hover:text-white border-slate-800'"
+                            :title="t('safe_mode_settings_btn')"
+                            class="px-2.5 py-1.5 rounded-xl border text-xs transition">
+                        ⚙️
+                    </button>
+                </div>
+            </div>
+
+            <!-- Спливаюче вікно налаштування Safe Mode тегів -->
+            <div v-if="showSafeSettings" class="p-3 bg-slate-950 border border-pink-500/30 rounded-xl space-y-2.5 text-xs">
+                <div class="flex items-center justify-between font-semibold text-slate-200">
+                    <span>⚙️ {{ t('safe_mode_settings_btn') }}</span>
+                    <button @click="showSafeSettings = false" class="text-slate-400 hover:text-white text-xs">✕</button>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div>
+                        <div class="flex items-center justify-between mb-0.5">
+                            <label class="text-[11px] text-slate-400">{{ t('safe_tags_hint') }}</label>
+                            <button type="button" @click="booruSafeTags = t('default_safe_tags_preset')" class="text-[10px] text-pink-400 hover:text-pink-300">
+                                {{ t('btn_default_safe_tags') }}
+                            </button>
+                        </div>
+                        <input v-model="booruSafeTags" type="text" placeholder="rating:safe"
+                               class="w-full px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white text-xs">
+                    </div>
+                    <div>
+                        <div class="flex items-center justify-between mb-0.5">
+                            <label class="text-[11px] text-slate-400">{{ t('non_safe_tags_hint') }}</label>
+                            <button type="button" @click="booruNonSafeTags = t('default_nsfw_tags_preset')" class="text-[10px] text-pink-400 hover:text-pink-300">
+                                {{ t('btn_default_nsfw_tags') }}
+                            </button>
+                        </div>
+                        <input v-model="booruNonSafeTags" type="text" placeholder="rating:explicit"
+                               class="w-full px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white text-xs">
+                    </div>
+                </div>
+                <div class="flex justify-between items-center gap-2 pt-1 border-t border-slate-800/80">
+                    <button type="button" @click="booruSafeTags = ''; booruNonSafeTags = ''; saveSafeTags()" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs">
+                        {{ t('btn_clear_tags') }}
+                    </button>
+                    <button type="button" @click="saveSafeTags" class="px-3.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow">
+                        💾 {{ t('btn_save_safe_settings') }}
+                    </button>
+                </div>
+            </div>
+
+            <!-- Мобільна панель швидких дій: кнопка відкриття меню фільтрів Booru (тільки на телефоні) -->
+            <div class="lg:hidden flex items-center justify-between gap-2.5">
+                <button type="button"
+                        @click="isMobileBooruFiltersOpen = true"
+                        class="flex-1 py-2.5 px-4 bg-slate-950 hover:bg-slate-800 border border-pink-500/30 rounded-xl text-xs font-semibold text-white flex items-center justify-between gap-2 shadow transition">
+                    <span class="flex items-center gap-1.5">
+                        <span>🌸 {{ t('booru_filters_title') }}</span>
+                        <span v-if="booruQuery" class="px-2 py-0.5 rounded-full bg-pink-950 text-pink-300 border border-pink-500/30 text-[10px] font-bold truncate max-w-[120px]">
+                            {{ booruQuery }}
+                        </span>
+                    </span>
+                    <span class="text-[11px] text-slate-300 font-mono">
+                        {{ booruPosts.length }}<span v-if="booruTotalCount !== null" class="text-slate-500"> / {{ Number(booruTotalCount).toLocaleString() }}</span>
+                    </span>
+                </button>
+            </div>
+
+            <!-- Верхня форма пошуку тегів та швидких фільтрів -->
             <form @submit.prevent="searchBooru(true)" class="flex flex-col sm:flex-row gap-3 relative">
                 <div class="relative flex-1">
                     <input v-model="booruQuery"
@@ -214,15 +440,15 @@
                            @input="onBooruQueryInput"
                            @blur="closeTagSuggestions"
                            @keydown="onBooruQueryKeydown"
-                           placeholder="Введіть теги латиницею через пробіл (напр. landscape sky order:score) — з'являться підказки..."
+                           :placeholder="t('booru_search_placeholder')"
                            class="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-sm text-white placeholder-slate-500 focus:border-pink-500 focus:outline-none">
 
                     <!-- Випадаючий список підказок тегів Yande.re -->
                     <div v-if="showTagSuggestions && tagSuggestions.length > 0"
                          class="absolute left-0 right-0 top-full mt-1.5 z-40 bg-slate-900/95 backdrop-blur-md border border-pink-500/40 rounded-xl shadow-2xl overflow-hidden max-h-72 overflow-y-auto divide-y divide-slate-800/70">
                         <div class="px-3 py-1.5 bg-slate-950/80 flex items-center justify-between text-[11px] text-slate-400">
-                            <span>💡 Підказки тегів Yande.re (↑↓ або клік для вибору)</span>
-                            <span v-if="isTagSuggestLoading" class="text-pink-400 animate-pulse">Пошук...</span>
+                            <span>💡 {{ t('booru_suggestions_title') }}</span>
+                            <span v-if="isTagSuggestLoading" class="text-pink-400 animate-pulse">{{ t('booru_suggestions_loading') }}</span>
                         </div>
                         <button v-for="(sug, sIdx) in tagSuggestions"
                                 :key="sug.name"
@@ -238,7 +464,7 @@
                                 </span>
                             </div>
                             <span v-if="sug.count && sug.type !== -1" class="text-[11px] text-slate-400 font-mono">
-                                {{ sug.count.toLocaleString() }} постів
+                                {{ sug.count.toLocaleString() }}
                             </span>
                         </button>
                     </div>
@@ -246,45 +472,64 @@
 
                 <button type="submit" :disabled="isBooruLoading"
                         class="px-6 py-2.5 rounded-xl bg-pink-600 hover:bg-pink-500 disabled:opacity-50 font-semibold text-sm text-white transition shadow-lg shadow-pink-600/25 shrink-0">
-                    🔍 Знайти на Yande.re
+                    🔍 {{ t('btn_find_booru') }}
                 </button>
             </form>
 
             <!-- Швидкі теги в один клік -->
-            <div class="flex flex-wrap items-center gap-1.5 pt-1 border-t border-slate-800/60">
-                <span class="text-xs text-slate-400 mr-1">Популярні:</span>
-                <button v-for="qTag in ['order:score', 'landscape', 'sky', 'scenery', 'original', 'wallpaper', 'night', 'water']"
-                        :key="qTag"
-                        type="button"
-                        @click="setBooruTag(qTag)"
-                        class="px-2.5 py-1 rounded-lg text-xs bg-slate-950 hover:bg-pink-950/60 text-slate-300 hover:text-pink-300 border border-slate-800 hover:border-pink-500/40 transition">
-                    #{{ qTag }}
-                </button>
+            <div class="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-800/60">
+                <div class="flex flex-wrap items-center gap-1.5">
+                    <span class="text-xs text-slate-400 mr-1">{{ t('popular_tags_label') }}</span>
+                    <button v-for="qTag in ['landscape', 'sky', 'scenery', 'original', 'wallpaper', 'night', 'water', 'girl']"
+                            :key="qTag"
+                            type="button"
+                            @click="setBooruTag(qTag)"
+                            class="px-2.5 py-1 rounded-lg text-xs bg-slate-950 hover:bg-pink-950/60 text-slate-300 hover:text-pink-300 border border-slate-800 hover:border-pink-500/40 transition">
+                        #{{ qTag }}
+                    </button>
+                </div>
+
+                <!-- Лічильник знайдених постів (загальна кількість на серверах + завантажено зараз) -->
+                <div v-if="booruTotalCount !== null || isCountLoading"
+                     class="text-xs text-slate-400 font-medium bg-slate-950/80 px-2.5 py-1 rounded-lg border border-slate-800 flex items-center gap-1.5 ml-auto">
+                    <span>📊</span>
+                    <span v-if="isCountLoading" class="text-pink-400 animate-pulse text-[11px] font-mono">...</span>
+                    <span v-else class="text-slate-300 text-[11px]">
+                        {{ t('booru_total_found_stat', { total: Number(booruTotalCount).toLocaleString(), loaded: booruOrientation === 'all' ? booruPosts.length : (filteredBooruPosts.length + '/' + booruPosts.length) }) }}
+                    </span>
+                </div>
             </div>
         </div>
 
-        <!-- Сітка постів Yande.re: адаптивні колонки регулюються повзунком зліва -->
-        <div v-if="booruPosts.length === 0 && !isBooruLoading"
+        <!-- Сітка постів Yande.re -->
+        <div v-if="filteredBooruPosts.length === 0 && !isBooruLoading"
              class="bg-slate-900/50 border border-slate-800 rounded-2xl p-12 text-center text-slate-400">
-            За цим запитом постів не знайдено. Спробуйте інший тег (наприклад, <code class="text-pink-400">order:score</code>).
+            {{ t('no_booru_posts') }}
         </div>
 
         <div class="grid gap-4" :class="'media-grid-' + booruCols">
-            <div v-for="post in booruPosts" :key="post.id"
+            <div v-for="(post, postIdx) in filteredBooruPosts" :key="(post.provider || '') + '_' + post.id"
                  class="bg-slate-900 border border-slate-800 hover:border-pink-500/50 rounded-2xl overflow-hidden flex flex-col justify-between group transition shadow-md">
                 <div>
                     <!-- Контейнер фото: адаптується з вибраними пропорціями та глобальним фітом -->
                     <div :class="['media-card-box', getBooruCardBoxClass(), 'media-fit-' + globalImageFit, 'border-b border-slate-800/80']"
+                         :style="getBooruCardBoxStyle()"
                          @click="openBooruModal(post)">
-                        <img :key="post.id + '_' + booruViewMode"
+                        <img :key="(post.provider || '') + '_' + post.id + '_' + booruViewMode"
                              :src="getBooruDisplayUrl(post, false)"
                              @error="handleBooruImgError($event, post, false)"
                              referrerpolicy="no-referrer"
-                             loading="lazy"
-                             :alt="'Yande.re #' + post.id" />
+                             :loading="postIdx < 12 ? 'eager' : 'lazy'"
+                             decoding="async"
+                             :alt="(post.provider_name || 'Booru') + ' #' + post.id" />
 
-                        <span class="absolute top-2 left-2 px-2 py-0.5 rounded-md text-[10px] font-bold bg-black/75 text-pink-300 border border-pink-500/30 backdrop-blur-sm">
-                            #{{ post.id }} • {{ booruViewMode === 'original' ? 'ORIG' : 'PREV' }}
+                        <span class="absolute top-2 left-2 px-2 py-0.5 rounded-md text-[10px] font-bold bg-black/75 text-pink-300 border border-pink-500/30 backdrop-blur-sm flex items-center gap-1">
+                            <span>{{ post.provider_name || post.provider || 'Booru' }}</span>
+                            <span>#{{ post.id }}</span>
+                            <span v-if="post.rating" class="ml-0.5 px-1 py-0.2 rounded text-[9px] uppercase font-bold"
+                                  :class="post.rating === 's' ? 'bg-emerald-950 text-emerald-300 border border-emerald-600/40' : 'bg-rose-950 text-rose-300 border border-rose-600/40'">
+                                {{ post.rating }}
+                            </span>
                         </span>
 
                         <span class="absolute top-2 right-2 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-black/75 text-slate-200 backdrop-blur-sm">
@@ -294,6 +539,16 @@
                         <span class="absolute bottom-2 left-2 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-black/75 text-amber-300 backdrop-blur-sm">
                             ★ {{ post.score }}
                         </span>
+
+                        <!-- Кнопка відкриття у новій вкладці прямо на картці -->
+                        <a :href="post.file_url || post.jpeg_url || post.sample_url"
+                           target="_blank"
+                           @click.stop
+                           :title="t('btn_open_tab')"
+                           class="absolute bottom-2 right-2 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-black/80 hover:bg-pink-600 text-slate-200 hover:text-white border border-slate-700 hover:border-pink-500/50 backdrop-blur-sm transition flex items-center gap-1 shadow">
+                            <span>↗</span>
+                            <span class="hidden sm:inline">{{ t('btn_open_tab') }}</span>
+                        </a>
                     </div>
 
                     <!-- Теги поста -->
@@ -309,22 +564,31 @@
                     </div>
                 </div>
 
-                <!-- Кнопки дій: Завантажити в 1 клік -->
-                <div class="px-3 pb-3 pt-1 flex items-center gap-2">
+                <!-- Кнопки дій: Завантажити в 1 клік, Нова вкладка, Перегляд -->
+                <div class="px-3 pb-3 pt-1 flex items-center gap-1.5">
                     <button @click="quickDownloadBooru(post)"
-                            :disabled="booruDownloadingIds[post.id]"
-                            :class="booruSavedIds[post.id]
-                                ? 'bg-emerald-600/30 text-emerald-300 border border-emerald-500/40'
+                            :disabled="booruDownloadingIds[`${post.provider || selectedBooruProvider}_${post.id}`] || isPostInVault(post)"
+                            :class="isPostInVault(post)
+                                ? 'bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 cursor-default'
                                 : 'bg-pink-600 hover:bg-pink-500 text-white shadow-md shadow-pink-600/20'"
                             class="flex-1 py-2 rounded-xl text-xs font-semibold transition flex items-center justify-center gap-1.5">
-                        <span v-if="booruDownloadingIds[post.id]">⏳ Качаємо...</span>
-                        <span v-else-if="booruSavedIds[post.id]">✅ У сховищі</span>
-                        <span v-else>⬇ Скачати в 1 клік</span>
+                        <span v-if="booruDownloadingIds[`${post.provider || selectedBooruProvider}_${post.id}`]">⏳ {{ t('status_downloading') }}</span>
+                        <span v-else-if="isPostInVault(post)">✅ {{ t('status_in_vault') }}</span>
+                        <span v-else>⬇ {{ t('btn_download') }}</span>
                     </button>
 
+                    <a :href="post.file_url || post.jpeg_url || post.sample_url"
+                       target="_blank"
+                       @click.stop
+                       :title="t('btn_open_tab')"
+                       class="px-2.5 sm:px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs text-slate-200 hover:text-white transition flex items-center gap-1">
+                        <span>↗</span>
+                        <span class="hidden sm:inline text-[11px]">{{ t('btn_open_tab') }}</span>
+                    </a>
+
                     <button @click="openBooruModal(post)"
-                            class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs text-slate-200 transition"
-                            title="Детальний перегляд">
+                            class="px-2.5 sm:px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs text-slate-200 hover:text-white transition"
+                            :title="t('btn_preview')">
                         👁️
                     </button>
                 </div>
@@ -335,15 +599,15 @@
         <div ref="booruScrollSentinel" class="py-6 flex flex-col items-center justify-center gap-3">
             <div v-if="isBooruLoading" class="flex items-center gap-2 text-sm text-pink-400 font-medium">
                 <span class="w-3 h-3 rounded-full bg-pink-500 animate-ping"></span>
-                Завантаження зображень з Yande.re...
+                {{ t('loading_booru_images') }}
             </div>
             <button v-else-if="hasMoreBooru && booruPosts.length > 0"
                     @click="loadNextBooruPage"
                     class="px-6 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 border border-slate-700 transition">
-                ➕ Завантажити ще сторінку
+                ➕ {{ t('load_next_page') }}
             </button>
             <div v-else-if="!hasMoreBooru && booruPosts.length > 0" class="text-xs text-slate-500">
-                🎉 Ви переглянули всі доступні зображення за цим запитом.
+                🎉 {{ t('all_booru_viewed') }}
             </div>
         </div>
     </div>

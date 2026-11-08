@@ -24,13 +24,25 @@ async def cmd_vault(message: Message) -> None:
 
     files = await downloader.storage.list_files()
     if query:
-        files = [
-            f for f in files
-            if query in f.name.lower()
-            or (f.title and query in f.title.lower())
-            or (f.source_platform and query in f.source_platform.lower())
-            or any(query in t.lower() for t in f.tags)
-        ]
+        # Підтримка фільтрації за типом медіа: video / image / audio / document / booru
+        if query in ("video", "відео", "кліп", "mp4"):
+            files = [f for f in files if f.media_type == "video"]
+        elif query in ("image", "фото", "картинка", "ілюстрація", "арт"):
+            files = [f for f in files if f.media_type == "image"]
+        elif query in ("audio", "аудіо", "музика", "пісня", "mp3"):
+            files = [f for f in files if f.media_type == "audio"]
+        elif query in ("document", "doc", "документ", "pdf"):
+            files = [f for f in files if f.media_type == "document"]
+        elif query in ("booru", "yande.re", "бору"):
+            files = [f for f in files if "yande.re" in f.name.lower() or (f.source_platform and "yande" in f.source_platform.lower()) or "yande.re" in [t.lower() for t in f.tags]]
+        else:
+            files = [
+                f for f in files
+                if query in f.name.lower()
+                or (f.title and query in f.title.lower())
+                or (f.source_platform and query in f.source_platform.lower())
+                or any(query in t.lower() for t in f.tags)
+            ]
 
     if not files:
         if query:
@@ -122,13 +134,25 @@ async def cb_batch_send_vault(callback: CallbackQuery) -> None:
 
     files = await downloader.storage.list_files()
     if query:
-        files = [
-            f for f in files
-            if query in f.name.lower()
-            or (f.title and query in f.title.lower())
-            or (f.source_platform and query in f.source_platform.lower())
-            or any(query in t.lower() for t in f.tags)
-        ]
+        # Підтримка фільтрації за типом медіа: video / image / audio / document / booru
+        if query in ("video", "відео", "кліп", "mp4"):
+            files = [f for f in files if f.media_type == "video"]
+        elif query in ("image", "фото", "картинка", "ілюстрація", "арт"):
+            files = [f for f in files if f.media_type == "image"]
+        elif query in ("audio", "аудіо", "музика", "пісня", "mp3"):
+            files = [f for f in files if f.media_type == "audio"]
+        elif query in ("document", "doc", "документ", "pdf"):
+            files = [f for f in files if f.media_type == "document"]
+        elif query in ("booru", "yande.re", "бору"):
+            files = [f for f in files if "yande.re" in f.name.lower() or (f.source_platform and "yande" in f.source_platform.lower()) or "yande.re" in [t.lower() for t in f.tags]]
+        else:
+            files = [
+                f for f in files
+                if query in f.name.lower()
+                or (f.title and query in f.title.lower())
+                or (f.source_platform and query in f.source_platform.lower())
+                or any(query in t.lower() for t in f.tags)
+            ]
 
     to_send = sorted(files, key=lambda x: x.modified_ts, reverse=True)[:count]
     if not to_send:

@@ -229,7 +229,7 @@ async def handle_discord_attachments(message: discord.Message, tags: list[str]) 
                     title=attachment.filename,
                     source_url=attachment.url,
                     source_platform="discord_upload",
-                    tags=tags,
+                    tags=list(dict.fromkeys(["discord", "discord_upload", *(tags or [])])),
                 )
                 final_paths.append(str(vault_path))
 
@@ -285,7 +285,7 @@ async def process_discord_url(
             max_height=prefs.max_height,
             task_id=task_id,
             progress_callback=on_progress,
-            extra_tags=tags,
+            extra_tags=list(dict.fromkeys(["discord", *(tags or [])])),
         )
 
         if result.status == TaskStatus.FINISHED and (result.file_paths or result.file_path):

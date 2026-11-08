@@ -16,6 +16,7 @@ from downloader.app.config.constants import (
 )
 from downloader.app.core.dto.media import ExtractedMediaItem, MediaType
 from downloader.app.core.dto.task import TaskProgress, TaskStatus
+from downloader.app.core.platforms import detect_source_platform
 from downloader.app.service.download.base import (
     BaseDownloader,
     ProgressCallback,
@@ -127,12 +128,13 @@ class DirectStreamDownloader(BaseDownloader):
             title=title,
             headers=extra_headers or {},
         )
+        resolved_plat = detect_source_platform(url=url, name=title, existing_platform=source_platform)
         return await self.download_items(
             task_id=task_id,
             source_url=url,
             items=[item],
             title=title,
-            source_platform=source_platform or "direct",
+            source_platform=resolved_plat,
             on_progress=on_progress,
         )
 
@@ -143,15 +145,16 @@ class DirectStreamDownloader(BaseDownloader):
         items: list[ExtractedMediaItem],
         title: str | None = None,
         description: str | None = None,
-        source_platform: str = "web",
+        source_platform: str | None = None,
         on_progress: ProgressCallback | None = None,
     ) -> TaskProgress:
+        resolved_plat = detect_source_platform(url=source_url, name=title, existing_platform=source_platform)
         progress = TaskProgress(
             task_id=task_id,
             url=source_url,
             title=title,
             description=description,
-            source_platform=source_platform,
+            source_platform=resolved_plat,
             status=TaskStatus.DOWNLOADING,
             media_type="gallery" if len(items) > 1 else "image",
         )

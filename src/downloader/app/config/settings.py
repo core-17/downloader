@@ -48,6 +48,7 @@ class Settings(BaseSettings):
             return self.REDIS_URL
         return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
 
+    STORAGE_BACKEND: str = "s3"
     S3_ENDPOINT_URL: str = "http://seaweedfs:8333"
     S3_ACCESS_KEY: SecretStr = SecretStr("any_access_key")
     S3_SECRET_KEY: SecretStr = SecretStr("any_secret_key")

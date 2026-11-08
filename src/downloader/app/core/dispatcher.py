@@ -11,6 +11,7 @@ from downloader.app.config.constants import (
 from downloader.app.core.deduplication import normalize_url
 from downloader.app.core.dto.media import MediaType
 from downloader.app.core.dto.task import TaskProgress, TaskStatus
+from downloader.app.core.platforms import detect_source_platform
 from downloader.app.service.compression.transcoder import process_image
 from downloader.app.service.download.base import ProgressCallback
 from downloader.app.service.download.direct_stream import DirectStreamDownloader
@@ -18,7 +19,10 @@ from downloader.app.service.download.video_yt_dlp import YtDlpDownloader
 from downloader.app.service.scrapers.booru import BooruService
 from downloader.app.service.scrapers.gallery import GalleryScraper
 from downloader.app.service.scrapers.web_static import StaticWebScraper
+from downloader.app.config.settings import get_settings
+from downloader.app.service.storage.base import BaseStorageProvider
 from downloader.app.service.storage.local import LocalVaultStorage
+from downloader.app.service.storage.s3 import S3StorageProvider
 
 
 class MediaDispatcher:
@@ -37,7 +41,20 @@ class MediaDispatcher:
         self.gallery_scraper = GalleryScraper()
         self.web_scraper = StaticWebScraper()
         self.booru_service = BooruService()
-        self.storage = LocalVaultStorage(base_dir=temp_dir)
+
+        # Вибір провайдера сховища (Local або S3)
+        settings = get_settings()
+        if settings.STORAGE_BACKEND.lower() == "s3":
+            self.storage: BaseStorageProvider = S3StorageProvider(
+                endpoint_url=settings.S3_ENDPOINT_URL,
+                access_key=settings.S3_ACCESS_KEY.get_secret_value() if hasattr(settings.S3_ACCESS_KEY, "get_secret_value") else str(settings.S3_ACCESS_KEY),
+                secret_key=settings.S3_SECRET_KEY.get_secret_value() if hasattr(settings.S3_SECRET_KEY, "get_secret_value") else str(settings.S3_SECRET_KEY),
+                bucket_name=settings.S3_BUCKET_NAME,
+                region_name=settings.S3_REGION,
+                cache_dir=temp_dir,
+            )
+        else:
+            self.storage = LocalVaultStorage(base_dir=temp_dir)
 
     def _is_direct_extension_or_cdn(self, url: str) -> bool:
         parsed = urlparse(url)
@@ -75,6 +92,8 @@ class MediaDispatcher:
         image_format: str = "original",
         image_max_side: int | None = None,
         title: str | None = None,
+        source_platform: str | None = None,
+        download_playlist: bool = True,
     ) -> TaskProgress:
         tags = tags or []
 
@@ -114,14 +133,43 @@ class MediaDispatcher:
         async def _finalize(res: TaskProgress, apply_img: bool = True) -> TaskProgress:
             if apply_img and res.status == TaskStatus.COMPLETED:
                 res = await _apply_image_processing(res)
-            res.tags = tags
+            # Якщо платформа досі не визначена або direct — визначаємо реальну платформу/сайт
+            if not res.source_platform or res.source_platform.lower() in ("direct", "direct_stream", "unknown"):
+                res.source_platform = detect_source_platform(
+                    url=res.url or url,
+                    name=res.title or title,
+                    tags=res.tags or tags,
+                    existing_platform=source_platform,
+                )
+            # Автоматичне маркування платформи та типу підключення у тегах
+            tags_set = set(tags or [])
+            if res.source_platform:
+                clean_plat = res.source_platform.lower().replace(" ", "_").replace(".", "_")
+                tags_set.add(clean_plat)
+            # Додаємо всі теги, сформовані сервісом (наприклад, назву плейлиста)
+            for t in (res.tags or []):
+                clean_t = str(t).strip().lower().lstrip("#")
+                if clean_t:
+                    tags_set.add(clean_t)
+            res.tags = sorted(list(tags_set))
             if res.status == TaskStatus.COMPLETED:
-                await self.storage.save_task_metadata(task_id, res)
+                extra_payload = {}
+                if getattr(res, "files_meta", None):
+                    extra_payload["files_meta"] = res.files_meta
+                await self.storage.save_task_metadata(task_id, res, extra=extra_payload)
             return res
 
-        # 0. Перевірка на Booru запит за тегами (наприклад: 'booru:landscape' або 'yande.re:genshin?limit=5')
-        if url.startswith(("booru:", "yande.re:")):
-            _, rest = url.split(":", 1)
+        # 0. Перевірка на Booru запит за тегами (наприклад: 'booru:landscape' або 'safebooru:cat?limit=5' або 'konachan:sky' або 'gelbooru:cat')
+        booru_prefixes = ("booru:", "yande.re:", "konachan:", "safebooru:", "zerochan:", "gelbooru:")
+        if url.startswith(booru_prefixes):
+            prefix, rest = url.split(":", 1)
+            prov = "yande.re"
+            if prefix in ("konachan", "safebooru", "zerochan", "gelbooru"):
+                prov = prefix
+            elif ":" in rest:
+                sub_prov, rest = rest.split(":", 1)
+                prov = sub_prov.strip()
+
             booru_tags = rest.strip()
             limit = 10
             if "?" in booru_tags:
@@ -132,7 +180,7 @@ class MediaDispatcher:
                 if "limit" in qs and qs["limit"][0].isdigit():
                     limit = int(qs["limit"][0])
 
-            page_media = await self.booru_service.fetch_posts(tags=booru_tags, limit=limit)
+            page_media = await self.booru_service.fetch_posts(provider=prov, tags=booru_tags, limit=limit)
             if page_media and page_media.items:
                 res = await self.direct.download_items(
                     task_id=task_id,
@@ -140,15 +188,16 @@ class MediaDispatcher:
                     items=page_media.items,
                     title=page_media.title,
                     description=page_media.description,
-                    source_platform="Yande.re",
+                    source_platform=page_media.platform or "Booru",
                     on_progress=wrapped_progress,
                 )
                 return await _finalize(res)
 
         clean_url = normalize_url(url)
 
-        # 0.1. Якщо передано посилання на пост або пошук yande.re
-        if "yande.re" in clean_url and not self._is_direct_extension_or_cdn(clean_url):
+        # 0.1. Якщо передано посилання на пост або пошук будь-якого Booru сайту
+        booru_domains = ("yande.re", "konachan.com", "konachan.net", "safebooru.org", "zerochan.net", "gelbooru.com")
+        if any(bd in clean_url for bd in booru_domains) and not self._is_direct_extension_or_cdn(clean_url):
             booru_media = await self.booru_service.extract(clean_url)
             if booru_media and booru_media.items:
                 res = await self.direct.download_items(
@@ -157,17 +206,19 @@ class MediaDispatcher:
                     items=booru_media.items,
                     title=booru_media.title,
                     description=booru_media.description,
-                    source_platform="Yande.re",
+                    source_platform=booru_media.platform or "Booru",
                     on_progress=wrapped_progress,
                 )
                 return await _finalize(res)
 
         # 1. Перевірка на пряме посилання на картинку або файл за розширенням / CDN
         if not audio_only and self._is_direct_extension_or_cdn(clean_url):
+            plat = detect_source_platform(url=clean_url, name=title, tags=tags, existing_platform=source_platform)
             res = await self.direct.download(
                 task_id=task_id,
                 url=clean_url,
                 title=title,
+                source_platform=plat,
                 on_progress=wrapped_progress,
             )
             return await _finalize(res)
@@ -185,12 +236,13 @@ class MediaDispatcher:
                 return
             await wrapped_progress(p)
 
-        # Спроба 1: yt-dlp (відео)
+        # Спроба 1: yt-dlp (відео та плейлисти)
         ytdlp_result = await self.ytdlp.download(
             task_id=task_id,
             url=clean_url,
             max_height=max_height,
             audio_only=audio_only,
+            download_playlist=download_playlist,
             on_progress=ytdlp_silent_progress,
         )
 
@@ -237,9 +289,11 @@ class MediaDispatcher:
         # 5. Fallback B: Перевірка HTTP Content-Type
         is_direct, _, final_url = await self.direct.probe_url(clean_url)
         if is_direct:
+            plat = detect_source_platform(url=final_url, name=title, tags=tags, existing_platform=source_platform)
             res = await self.direct.download(
                 task_id=task_id,
                 url=final_url,
+                source_platform=plat,
                 on_progress=wrapped_progress,
             )
             if res.status == TaskStatus.COMPLETED:

@@ -1,67 +1,185 @@
 <!-- ==================== МОДАЛЬНЕ ВІКНО ПЕРЕГЛЯДУ ФАЙЛУ СХОВИЩА ==================== -->
 <div v-if="modalFile"
-     class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+     class="fixed inset-0 z-[100] bg-black/90 backdrop-blur-md flex flex-col items-center justify-start sm:justify-center p-0 sm:p-4 overflow-y-auto overscroll-contain"
      @click.self="closeModal">
-    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-4xl w-full overflow-hidden shadow-2xl">
-        <div class="flex items-center justify-between px-5 py-3.5 border-b border-slate-800">
-            <div class="truncate pr-4">
-                <h3 class="text-sm font-bold text-white truncate">{{ modalFile.name }}</h3>
-                <p class="text-xs text-slate-400">
-                    {{ modalFile.size_mb }} МБ • {{ formatDate(modalFile.modified_ts) }}
+    <div class="bg-slate-900 border-0 sm:border border-slate-700 sm:rounded-2xl max-w-5xl w-full flex flex-col h-full sm:h-auto max-h-[100dvh] sm:max-h-[92vh] shadow-2xl overflow-hidden">
+        
+        <!-- Закріплений верхній бар (завжди доступний над інтерфейсом мобільного браузера) -->
+        <div class="sticky top-0 z-30 shrink-0 bg-slate-900/98 backdrop-blur-md border-b border-slate-800 px-4 sm:px-5 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] flex items-center justify-between gap-3">
+            <div class="truncate pr-2">
+                <h3 class="text-xs sm:text-sm font-bold text-white truncate">{{ modalFile.name }}</h3>
+                <p class="text-[11px] text-slate-400 truncate">
+                    {{ modalFile.size_mb }} {{ t('mb') }} • {{ formatDate(modalFile.modified_ts) }}
                     <span v-if="modalFile.source_platform"> • {{ modalFile.source_platform }}</span>
                 </p>
             </div>
-            <button @click="closeModal"
-                    class="px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm">
-                ✕ Закрити
-            </button>
-        </div>
+            <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                <!-- Лічильник та кнопки навігації по фільтрах у шапці -->
+                <div v-if="modalFileIndex >= 0" class="flex items-center bg-slate-950 border border-slate-800 rounded-xl p-0.5 sm:p-1 gap-1 text-xs">
+                    <button type="button"
+                            @click="prevModalFile"
+                            :disabled="modalFileIndex <= 0"
+                            :title="t('btn_prev') + ' (←)'"
+                            class="px-2 py-1 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition font-bold">
+                        ‹
+                    </button>
+                    <span class="px-1.5 py-0.5 text-[11px] font-mono text-slate-400 whitespace-nowrap">
+                        {{ modalFileIndex + 1 }} / {{ filteredVaultFiles.length }}
+                    </span>
+                    <button type="button"
+                            @click="nextModalFile"
+                            :disabled="modalFileIndex >= filteredVaultFiles.length - 1"
+                            :title="t('btn_next') + ' (→)'"
+                            class="px-2 py-1 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition font-bold">
+                        ›
+                    </button>
+                </div>
 
-        <div class="p-4 bg-slate-950 flex items-center justify-center max-h-[75vh] overflow-auto">
-            <img v-if="modalFile.media_type === 'image'"
-                 :src="modalFile.view_url || ('/api/v1/files/view/' + encodeVaultPath(modalFile.relative_path))"
-                 class="max-h-[70vh] w-auto object-contain rounded-lg" />
-            <video v-else-if="modalFile.media_type === 'video'"
-                   :src="modalFile.view_url || ('/api/v1/files/view/' + encodeVaultPath(modalFile.relative_path))"
-                   controls autoplay
-                   class="max-h-[70vh] w-full rounded-lg"></video>
-            <audio v-else-if="modalFile.media_type === 'audio'"
-                   :src="modalFile.view_url || ('/api/v1/files/view/' + encodeVaultPath(modalFile.relative_path))"
-                   controls autoplay
-                   class="w-full my-8"></audio>
-            <iframe v-else-if="modalFile.extension === 'pdf'"
-                    :src="modalFile.view_url || ('/api/v1/files/view/' + encodeVaultPath(modalFile.relative_path))"
-                    class="w-full h-[70vh] rounded-lg border-0"></iframe>
-            <div v-else class="py-12 text-center space-y-3">
-                <div class="text-5xl">{{ getMediaIcon(modalFile.media_type) }}</div>
-                <div class="text-sm text-slate-300">Попередній перегляд для цього типу файлу недоступний</div>
-            </div>
-        </div>
-
-        <div class="flex flex-wrap items-center justify-between gap-2 px-5 py-3.5 bg-slate-900 border-t border-slate-800">
-            <div class="flex flex-wrap gap-1">
-                <span v-for="t in (modalFile.tags || [])" :key="t"
-                      class="px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 text-xs">
-                    #{{ t }}
-                </span>
-            </div>
-            <div class="flex items-center gap-3">
-                <button type="button"
-                        @click="deleteVaultFile(modalFile)"
-                        class="px-4 py-2 rounded-xl bg-rose-500/20 hover:bg-rose-600 text-xs font-semibold text-rose-300 hover:text-white border border-rose-500/30 transition">
-                    🗑️ Видалити зі сховища
-                </button>
                 <a :href="modalFile.view_url || ('/api/v1/files/view/' + encodeVaultPath(modalFile.relative_path))"
                    target="_blank"
-                   class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 transition">
-                    🔗 Відкрити у новій вкладці
+                   :title="t('modal_new_tab')"
+                   class="px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-slate-200 text-xs font-semibold flex items-center gap-1 transition">
+                    <span>↗</span>
+                    <span class="hidden sm:inline">{{ t('modal_new_tab') }}</span>
                 </a>
-                <a :href="modalFile.download_url || ('/api/v1/files/download/' + encodeVaultPath(modalFile.relative_path))"
-                   class="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-xs font-semibold text-white transition">
-                    ⬇ Скачати на пристрій
-                </a>
+                <button type="button"
+                        @click="closeModal"
+                        :title="t('modal_close')"
+                        class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-slate-200 hover:text-white text-xs sm:text-sm font-bold transition flex items-center gap-1">
+                    <span>✕</span>
+                    <span class="hidden sm:inline">{{ t('modal_close') }}</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Центральна область медіа з підтримкою свайпу та стрілок гортання -->
+        <div class="flex-1 bg-slate-950 flex items-center justify-center p-2 sm:p-4 overflow-auto min-h-0 relative select-none"
+             @touchstart="onVaultTouchStart"
+             @touchend="onVaultTouchEnd">
+
+            <!-- Плаваюча кнопка Вліво (Попереднє за фільтром) -->
+            <button v-if="modalFileIndex > 0"
+                    type="button"
+                    @click.stop="prevModalFile"
+                    :title="t('btn_prev') + ' (←)'"
+                    class="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 z-20 w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-slate-900/80 hover:bg-slate-850 border border-slate-700 text-white flex items-center justify-center text-xl sm:text-2xl shadow-2xl transition opacity-75 hover:opacity-100 active:scale-95">
+                ‹
+            </button>
+
+            <!-- Плаваюча кнопка Вправо (Наступне за фільтром) -->
+            <button v-if="modalFileIndex >= 0 && modalFileIndex < filteredVaultFiles.length - 1"
+                    type="button"
+                    @click.stop="nextModalFile"
+                    :title="t('btn_next') + ' (→)'"
+                    class="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 z-20 w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-slate-900/80 hover:bg-slate-850 border border-slate-700 text-white flex items-center justify-center text-xl sm:text-2xl shadow-2xl transition opacity-75 hover:opacity-100 active:scale-95">
+                ›
+            </button>
+
+            <img v-if="modalFile.media_type === 'image'"
+                 :key="modalFile.relative_path"
+                 :src="modalFile.view_url || ('/api/v1/files/view/' + encodeVaultPath(modalFile.relative_path))"
+                 class="max-h-full max-w-full w-auto h-auto object-contain rounded-lg shadow-lg pointer-events-auto" />
+            <video v-else-if="modalFile.media_type === 'video'"
+                   :key="modalFile.relative_path"
+                   :src="modalFile.view_url || ('/api/v1/files/view/' + encodeVaultPath(modalFile.relative_path))"
+                   controls autoplay playsinline
+                   class="max-h-full max-w-full w-auto h-auto rounded-lg shadow-lg pointer-events-auto"></video>
+            <audio v-else-if="modalFile.media_type === 'audio'"
+                   :key="modalFile.relative_path"
+                   :src="modalFile.view_url || ('/api/v1/files/view/' + encodeVaultPath(modalFile.relative_path))"
+                   controls autoplay
+                   class="w-full max-w-md my-8 px-4 pointer-events-auto"></audio>
+            <iframe v-else-if="modalFile.extension === 'pdf'"
+                    :key="modalFile.relative_path"
+                    :src="modalFile.view_url || ('/api/v1/files/view/' + encodeVaultPath(modalFile.relative_path))"
+                    class="w-full h-full rounded-lg border-0 pointer-events-auto"></iframe>
+            <div v-else class="py-12 text-center space-y-3 pointer-events-auto">
+                <div class="text-5xl">{{ getMediaIcon(modalFile.media_type) }}</div>
+                <div class="text-sm text-slate-300">{{ t('modal_no_preview') }}</div>
+            </div>
+        </div>
+
+        <!-- Закріплений нижній бар дій -->
+        <div class="sticky bottom-0 z-30 shrink-0 bg-slate-900/98 backdrop-blur-md border-t border-slate-800 px-4 sm:px-5 py-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))] flex flex-col gap-2.5">
+            <!-- Звичайний режим перегляду тегів -->
+            <div v-if="!isEditingTags" class="flex flex-wrap items-center justify-between gap-2">
+                <div class="flex flex-wrap items-center gap-1.5 max-h-16 overflow-y-auto flex-1 min-w-[200px]">
+                    <span v-for="t in (modalFile.tags || [])" :key="t"
+                          class="px-2 py-0.5 rounded-lg bg-indigo-500/20 text-indigo-300 text-xs font-mono">
+                        #{{ t }}
+                    </span>
+                    <span v-if="!modalFile.tags || modalFile.tags.length === 0" class="text-xs text-slate-500 italic">
+                        {{ t('no_tags_file') }}
+                    </span>
+                    <button type="button"
+                            @click="startEditingTags"
+                            :title="t('edit_tags')"
+                            class="px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-[11px] font-medium border border-slate-700 transition flex items-center gap-1">
+                        <span>✏️</span>
+                        <span>{{ t('edit_tags') }}</span>
+                    </button>
+                </div>
+                <div class="flex items-center gap-2 ml-auto shrink-0">
+                    <button type="button"
+                            @click="deleteVaultFile(modalFile)"
+                            class="px-3 py-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-600 text-xs font-semibold text-rose-300 hover:text-white border border-rose-500/30 transition">
+                        🗑️ <span class="hidden sm:inline">{{ t('btn_delete') }}</span>
+                    </button>
+                    <a :href="modalFile.view_url || ('/api/v1/files/view/' + encodeVaultPath(modalFile.relative_path))"
+                       target="_blank"
+                       class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 transition flex items-center gap-1">
+                        <span>↗</span>
+                        <span>{{ t('modal_new_tab') }}</span>
+                    </a>
+                    <a :href="modalFile.download_url || ('/api/v1/files/download/' + encodeVaultPath(modalFile.relative_path))"
+                       class="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-xs font-semibold text-white transition flex items-center gap-1">
+                        <span>⬇</span>
+                        <span>{{ t('btn_download') }}</span>
+                    </a>
+                </div>
+            </div>
+
+            <!-- Режим редагування тегів файлу -->
+            <div v-else class="flex flex-col gap-2 w-full pt-1">
+                <div class="flex items-center justify-between text-xs font-semibold text-slate-300">
+                    <span class="flex items-center gap-1">✏️ {{ t('edit_tags') }}</span>
+                    <span class="text-[11px] text-slate-400">({{ modalFileTags.length }})</span>
+                </div>
+                <div class="flex flex-wrap items-center gap-1.5 max-h-24 overflow-y-auto p-1.5 bg-slate-950/70 border border-slate-800 rounded-xl">
+                    <span v-for="t in modalFileTags" :key="t"
+                          class="px-2 py-0.5 rounded-lg bg-indigo-600/30 text-indigo-200 border border-indigo-500/40 text-xs font-mono flex items-center gap-1">
+                        <span>#{{ t }}</span>
+                        <button type="button" @click="removeTagFromModalFile(t)" class="text-rose-400 hover:text-rose-200 text-xs font-bold px-0.5">✕</button>
+                    </span>
+                    <span v-if="modalFileTags.length === 0" class="text-xs text-slate-500 italic p-1">
+                        {{ t('no_tags_file') }}
+                    </span>
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                    <div class="flex-1 min-w-[200px] flex items-center gap-1">
+                        <input v-model="editingTagInput"
+                               @keydown.enter.prevent="addTagToModalFile"
+                               type="text"
+                               :placeholder="t('add_tag_placeholder')"
+                               class="w-full px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-xs focus:border-indigo-500 focus:outline-none">
+                        <button type="button" @click="addTagToModalFile"
+                                class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold shrink-0">
+                            ➕ {{ t('btn_add_tag') }}
+                        </button>
+                    </div>
+                    <div class="flex items-center gap-1.5 ml-auto">
+                        <button type="button" @click="saveModalFileTags"
+                                class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow flex items-center gap-1">
+                            <span>💾</span>
+                            <span>{{ t('btn_save_tags') }}</span>
+                        </button>
+                        <button type="button" @click="cancelEditingTags"
+                                class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs">
+                            ✕ {{ t('btn_cancel_tags') }}
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 </div>
-
